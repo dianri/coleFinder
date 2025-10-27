@@ -1,0 +1,46 @@
+# Gradle files
+.gradle/
+build/
+output.json
+
+# Local configuration
+local.properties
+
+# IntelliJ/Android Studio files
+*.iml
+.idea/
+*.ipr
+*.iws
+
+# Keystore files (security)
+*.jks
+
+# NDK, CMake, external build
+.externalNativeBuild
+.cxx/
+obj/
+
+# Captures and generated files
+captures/
+.navigation/
+*.log
+
+# Mac OS / Windows / Linux system files
+.DS_Store
+Thumbs.db
+
+# APK, AAB and build outputs
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+
+# Proguard, lint, coverage, and test
+proguard/
+lint/
+test-output/
+
+# Miscellaneous
+*.swp
+
