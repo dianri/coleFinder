@@ -49,13 +49,17 @@ class MapViewModel @Inject constructor(
 
     fun updateUserLocation(latLng: LatLng) {
         viewModelScope.launch {
+            _state.update { it.copy(userLocation = latLng) }
             _state.value.cameraPosition.animate(
                 CameraUpdateFactory.newLatLngZoom(latLng, 15f)
             )
-            // After moving to user location, search nearby colleges
-            // In a real app we would filter by distance, for now we just refresh
+            // Just refresh data, the getter in MapState will sort them by the new location
             fetchColegios()
         }
+    }
+
+    fun setFiltro(tipo: String) {
+        _state.update { it.copy(filtroSeleccionado = tipo) }
     }
 
     fun buscarDireccion(query: String, context: Context) {
@@ -91,6 +95,14 @@ class MapViewModel @Inject constructor(
             } finally {
                 _state.update { it.copy(isLoading = false) }
             }
+        }
+    }
+
+    fun moverAColegio(latLng: LatLng) {
+        viewModelScope.launch {
+            _state.value.cameraPosition.animate(
+                CameraUpdateFactory.newLatLngZoom(latLng, 17f)
+            )
         }
     }
 }
