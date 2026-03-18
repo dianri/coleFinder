@@ -8,18 +8,24 @@ import es.colefinder.data.model.Colegio
 data class MapState(
     val isLoading: Boolean = false,
     val colegios: List<Colegio> = emptyList(),
+    val suggestions: List<SearchSuggestion> = emptyList(),
     val error: String? = null,
     val userLocation: LatLng? = null,
+    val puntoReferencia: LatLng? = null,
+    val selectedColegio: Colegio? = null,
     val filtroSeleccionado: String = "Todos",
     val cameraPosition: CameraPositionState = CameraPositionState(
         position = CameraPosition.fromLatLngZoom(LatLng(40.4168, -3.7038), 6f)
     )
 ) {
-    // Computed list of colegios with their distance to the user (or Madrid as fallback) and filtered by type
+    // Computed list of up to 50 colegios with their distance to the reference point (or user location/Madrid as fallback)
+    // We apply distinctBy here as well just to be 100% safe against UI duplication bugs
     val colegiosConDistancia: List<ColegioConDistancia>
         get() {
-            val reference = userLocation ?: LatLng(40.4168, -3.7038)
+            val reference = puntoReferencia ?: userLocation ?: LatLng(40.4168, -3.7038)
+            
             return colegios
+                .distinctBy { it.id }
                 .filter { colegio ->
                     filtroSeleccionado == "Todos" || colegio.tipo.contains(filtroSeleccionado, ignoreCase = true)
                 }
@@ -33,8 +39,15 @@ data class MapState(
                     ColegioConDistancia(colegio, results[0].toDouble())
                 }
                 .sortedBy { it.distanciaMetros }
+                .take(50)
         }
 }
+
+data class SearchSuggestion(
+    val title: String,
+    val subtitle: String,
+    val latLng: LatLng
+)
 
 data class ColegioConDistancia(
     val colegio: Colegio,

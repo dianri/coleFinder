@@ -10,5 +10,6 @@ data class Colegio(
     val latitud: Double,
     val longitud: Double,
     val tipo: String,
-    val localidad: String
+    val localidad: String,
+    val telefono: String? = null // Simulated field for now
 )

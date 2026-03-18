@@ -2,7 +2,14 @@ package es.colefinder.ui.map
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,19 +17,25 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -34,10 +47,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,11 +70,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
+import es.colefinder.data.model.Colegio
 import es.colefinder.ui.utils.createNumberedMarkerBitmap
 import kotlinx.coroutines.launch
 
@@ -92,10 +108,15 @@ fun MapScreen(
         LocationServices.getFusedLocationProviderClient(context)
     }
 
+    val uiSettings = remember {
+        MapUiSettings(
+            myLocationButtonEnabled = false,
+            compassEnabled = true,
+            mapToolbarEnabled = false
+        )
+    }
+
     Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("ColeFinder - Mapa de Colegios") })
-        },
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End) {
                 FloatingActionButton(
@@ -114,7 +135,7 @@ fun MapScreen(
                     },
                     modifier = Modifier.padding(bottom = 16.dp)
                 ) {
-                    Icon(Icons.Default.MyLocation, contentDescription = "Mi ubicación")
+                    Icon(Icons.Default.LocationOn, contentDescription = "Mi ubicación")
                 }
                 
                 FloatingActionButton(
@@ -132,18 +153,33 @@ fun MapScreen(
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = state.cameraPosition,
+                onMapLongClick = { latLng ->
+                    viewModel.onMapLongClick(latLng)
+                },
+                onMapClick = {
+                    viewModel.clearSelectedColegio()
+                },
                 properties = MapProperties(
                     isMyLocationEnabled = locationPermissionsState.allPermissionsGranted
-                )
+                ),
+                uiSettings = uiSettings
             ) {
-                // Iteramos sobre la lista ordenada y filtrada para asignar la numeración
+                // Marcador de Referencia
+                state.puntoReferencia?.let {
+                    Marker(
+                        state = MarkerState(position = it),
+                        title = "Punto de Referencia",
+                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
+                    )
+                }
+
+                // Colegios
                 state.colegiosConDistancia.forEachIndexed { index, colegioConDist ->
                     val colegio = colegioConDist.colegio
                     val numberLabel = (index + 1).toString()
                     val markerColor = if (colegio.tipo.contains("Público", true)) Color(0xFF4CAF50) else Color(0xFF2196F3)
                     
-                    // Generamos el icono numerado dinámico
-                    val icon = remember(colegio.id, numberLabel, markerColor) {
+                    val icon = remember(colegio.id, numberLabel, markerColor, state.puntoReferencia) {
                         createNumberedMarkerBitmap(context, numberLabel, markerColor)
                     }
 
@@ -151,34 +187,126 @@ fun MapScreen(
                         state = MarkerState(position = LatLng(colegio.latitud, colegio.longitud)),
                         title = colegio.nombre,
                         snippet = colegio.tipo,
-                        icon = icon
+                        icon = icon,
+                        onClick = {
+                            viewModel.onColegioClick(colegio)
+                            true
+                        }
                     )
                 }
             }
 
+            // SearchBar M3
             SearchBar(
                 query = searchQuery,
-                onQueryChange = { searchQuery = it },
+                onQueryChange = { 
+                    searchQuery = it
+                    viewModel.onSearchQueryChanged(it, context)
+                },
                 onSearch = {
                     viewModel.buscarDireccion(searchQuery, context)
                     searchActive = false
                 },
                 active = searchActive,
-                onActiveChange = { searchActive = it },
-                placeholder = { Text("Buscar dirección...") },
+                onActiveChange = { 
+                    searchActive = it 
+                    if (!it) searchQuery = ""
+                },
+                placeholder = { Text("Buscar colegio o dirección...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
+                    if (searchActive && searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
                             Icon(Icons.Default.Close, contentDescription = null)
                         }
+                    } else if (!searchActive) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "Perfil",
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
                     }
                 },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(16.dp)
+                    .padding(if (searchActive) 0.dp else 16.dp)
                     .fillMaxWidth()
-            ) {}
+            ) {
+                // Sugerencias combinadas: Geocoder + Colegios Locales
+                LazyColumn {
+                    // Sugerencias del Geocoder
+                    items(state.suggestions.size) { index ->
+                        val suggestion = state.suggestions[index]
+                        ListItem(
+                            headlineContent = { Text(suggestion.title) },
+                            supportingContent = { Text(suggestion.subtitle) },
+                            leadingContent = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+                            modifier = Modifier.clickable {
+                                searchQuery = suggestion.title
+                                searchActive = false
+                                viewModel.selectSuggestion(suggestion)
+                            }
+                        )
+                    }
+
+                    // Sugerencias de colegios si el Geocoder está vacío o como complemento
+                    if (searchQuery.isNotEmpty()) {
+                        val filteredColegios = state.colegios.filter { 
+                            it.nombre.contains(searchQuery, ignoreCase = true)
+                        }.take(5)
+                        
+                        items(filteredColegios.size) { index ->
+                            val colegio = filteredColegios[index]
+                            ListItem(
+                                headlineContent = { Text(colegio.nombre) },
+                                supportingContent = { Text(colegio.localidad) },
+                                leadingContent = { Icon(Icons.Default.Search, contentDescription = null) },
+                                modifier = Modifier.clickable {
+                                    searchQuery = colegio.nombre
+                                    searchActive = false
+                                    viewModel.moverAColegio(LatLng(colegio.latitud, colegio.longitud), colegio)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Card de Detalle
+            AnimatedVisibility(
+                visible = state.selectedColegio != null,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+                    .padding(bottom = 80.dp)
+            ) {
+                state.selectedColegio?.let { colegio ->
+                    ColegioDetailCard(
+                        colegio = colegio,
+                        onClose = { viewModel.clearSelectedColegio() },
+                        onNavigate = {
+                            val uri = Uri.parse("google.navigation:q=${colegio.latitud},${colegio.longitud}")
+                            val mapIntent = Intent(Intent.ACTION_VIEW, uri)
+                            mapIntent.setPackage("com.google.android.apps.maps")
+                            try {
+                                context.startActivity(mapIntent)
+                            } catch (e: Exception) {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                            }
+                        },
+                        onCall = {
+                            colegio.telefono?.let { tel ->
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$tel"))
+                                context.startActivity(intent)
+                            } ?: run {
+                                Toast.makeText(context, "Teléfono no disponible", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                }
+            }
 
             if (state.isLoading) {
                 CircularProgressIndicator(
@@ -199,15 +327,82 @@ fun MapScreen(
                 BottomSheetContent(
                     state = state,
                     onFilterChange = { viewModel.setFiltro(it) },
-                    onColegioClick = { latLng ->
+                    onColegioClick = { colegio ->
                         scope.launch { sheetState.hide() }.invokeOnCompletion {
                             if (!sheetState.isVisible) {
                                 showBottomSheet = false
                             }
                         }
-                        viewModel.moverAColegio(latLng)
+                        viewModel.moverAColegio(LatLng(colegio.latitud, colegio.longitud), colegio)
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun ColegioDetailCard(
+    colegio: Colegio,
+    onClose: () -> Unit,
+    onNavigate: () -> Unit,
+    onCall: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = colegio.nombre,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Badge(
+                        containerColor = if (colegio.tipo.contains("Público", true)) Color(0xFF4CAF50) else Color(0xFF2196F3),
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        Text(colegio.tipo, color = Color.White, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                    }
+                }
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Default.Close, contentDescription = "Cerrar")
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Text(
+                text = "${colegio.direccion}, ${colegio.localidad}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Spacer(modifier = Modifier.height(20.dp))
+            
+            Row(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = onCall,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Call, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Llamar")
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Button(
+                    onClick = onNavigate,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Directions, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Navegar")
+                }
             }
         }
     }
@@ -218,7 +413,7 @@ fun MapScreen(
 fun BottomSheetContent(
     state: MapState,
     onFilterChange: (String) -> Unit,
-    onColegioClick: (LatLng) -> Unit
+    onColegioClick: (Colegio) -> Unit
 ) {
     val listState = rememberLazyListState()
     val categorias = listOf("Todos", "Público", "Concertado")
@@ -297,7 +492,7 @@ fun BottomSheetContent(
                             }
                         },
                         modifier = Modifier.clickable {
-                            onColegioClick(LatLng(colegio.latitud, colegio.longitud))
+                            onColegioClick(colegio)
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
