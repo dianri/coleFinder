@@ -1,0 +1,55 @@
+---
+description: Arquitectura general de ColeFinder
+globs:
+alwaysApply: true
+---
+
+# ColeFinder - Arquitectura
+
+## Contexto del proyecto
+- App Android nativa para docentes que geolocaliza centros educativos.
+- Estado actual: MVP avanzado.
+- Backend principal: Supabase alojado en https://api.dianrie.com.
+- Lenguaje principal: Kotlin 2.0.21.
+- Target SDK: 36.
+
+## Reglas obligatorias
+- Usar siempre Kotlin moderno.
+- No usar XML salvo que el usuario lo pida explícitamente.
+- La UI debe implementarse con Jetpack Compose y Material 3.
+- Mantener arquitectura MVVM con flujo unidireccional de estado.
+- Toda lógica de datos debe integrarse en `MapState`.
+- El ViewModel principal es `MapViewModel`.
+- **Sin escrituras directas a Supabase desde composables:** capa de datos/ViewModel; `colegios` solo lectura salvo requisito explícito (detalle en `.cursor/rules/data-supabase.mdc`).
+- Evitar refactors grandes si no son necesarios para la tarea.
+- Hacer cambios mínimos, coherentes y compilables.
+
+## Estado y flujo
+- `MapState` gestiona:
+  - `isLoading`
+  - `colegiosConDistancia`
+  - `userLocation`
+  - `filtroSeleccionado`
+  - `cameraPositionState`
+- `MapViewModel` se encarga de:
+  - Fetch desde Supabase
+  - Geocoder con debounce de 300ms
+  - Ordenación por distancia
+  - Preparación de estado para la UI
+
+## Reglas de calidad
+- No inventar clases, funciones ni nombres de propiedades si no existen en el proyecto.
+- Antes de proponer cambios grandes, resumir qué archivos se tocarán.
+- Priorizar cambios pequeños antes que reescrituras completas.
+- Si falta contexto, pedir aclaración antes de modificar arquitectura.
+- No mover lógica al Main Thread si puede ser costosa.
+- Mantener compatibilidad con Hilt, Compose y Supabase SDK.
+
+## Deduplicación obligatoria
+- Antes de actualizar el estado con listas de colegios, aplicar siempre:
+  - `.distinctBy { it.id }`
+
+## Estilo de trabajo
+- Explica brevemente el plan antes de editar.
+- Después de editar, indica cómo verificar el cambio en Android Studio.
+- Si un cambio afecta a arquitectura, justificarlo en pocas líneas.

@@ -43,9 +43,9 @@ class MapViewModel @Inject constructor(
                 val result = supabase.postgrest["colegios"]
                     .select()
                     .decodeList<Colegio>()
-                    .distinctBy { it.id }
+                val deduplicatedResult = result.distinctBy { it.id }
                 
-                _state.update { it.copy(colegios = result, isLoading = false) }
+                _state.update { it.copy(colegios = deduplicatedResult, isLoading = false) }
             } catch (e: Exception) {
                 e.printStackTrace()
                 _state.update { it.copy(error = e.localizedMessage, isLoading = false) }

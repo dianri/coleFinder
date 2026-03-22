@@ -56,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -176,23 +177,25 @@ fun MapScreen(
                 // Colegios
                 state.colegiosConDistancia.forEachIndexed { index, colegioConDist ->
                     val colegio = colegioConDist.colegio
-                    val numberLabel = (index + 1).toString()
-                    val markerColor = if (colegio.tipo.contains("Público", true)) Color(0xFF4CAF50) else Color(0xFF2196F3)
-                    
-                    val icon = remember(colegio.id, numberLabel, markerColor, state.puntoReferencia) {
-                        createNumberedMarkerBitmap(context, numberLabel, markerColor)
-                    }
+                    key(colegio.id) {
+                        val numberLabel = (index + 1).toString()
+                        val markerColor = if (colegio.tipo.contains("Público", true)) Color(0xFF4CAF50) else Color(0xFF2196F3)
 
-                    Marker(
-                        state = MarkerState(position = LatLng(colegio.latitud, colegio.longitud)),
-                        title = colegio.nombre,
-                        snippet = colegio.tipo,
-                        icon = icon,
-                        onClick = {
-                            viewModel.onColegioClick(colegio)
-                            true
+                        val icon = remember(colegio.id, numberLabel, markerColor, state.puntoReferencia) {
+                            createNumberedMarkerBitmap(context, numberLabel, markerColor)
                         }
-                    )
+
+                        Marker(
+                            state = MarkerState(position = LatLng(colegio.latitud, colegio.longitud)),
+                            title = colegio.nombre,
+                            snippet = colegio.tipo,
+                            icon = icon,
+                            onClick = {
+                                viewModel.onColegioClick(colegio)
+                                true
+                            }
+                        )
+                    }
                 }
             }
 
@@ -463,7 +466,10 @@ fun BottomSheetContent(
             }
         } else {
             LazyColumn(state = listState) {
-                items(state.colegiosConDistancia.size) { index ->
+                items(
+                    count = state.colegiosConDistancia.size,
+                    key = { index -> state.colegiosConDistancia[index].colegio.id }
+                ) { index ->
                     val item = state.colegiosConDistancia[index]
                     val colegio = item.colegio
                     val dist = item.distanciaMetros
