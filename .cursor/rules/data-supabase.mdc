@@ -1,0 +1,128 @@
+---
+alwaysApply: true
+---
+# ColeFinder - Datos y Supabase
+
+## Stack de datos
+- Backend: Supabase (Postgres + PostgREST).
+- Cliente de red: Supabase SDK (`postgrest-kt` v3.0.3) + Ktor.
+- Inyección de dependencias: Hilt.
+- Cliente centralizado: `SupabaseClient`.
+- Configuración de red: `NetworkModule`.
+
+## Tabla principal: `public.colegios`
+
+Es la **única tabla de lectura** que usa la app. La app no hace `insert`/`update`/`delete` sobre ella; los datos se poblan desde jobs/scripts en servidor.
+
+### Columnas relevantes para la app
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `integer` | PK serial |
+| `nombre` | `text` | Nombre visible del centro |
+| `direccion` | `text` | Dirección completa |
+| `latitud` | `double precision` | |
+| `longitud` | `double precision` | |
+| `tipo` | `text` | Texto libre de titularidad (inconsistente entre fuentes; usar `titularidad_normalizada` preferentemente) |
+| `localidad` | `text` | |
+| `provincia` | `text` | |
+| `telefono` | `text` | |
+| `fuente` | `text` | Origen: `'andalucia'`, `'castilla_y_leon'`, `'canarias'`, `'comunidad_madrid'`, `'datos.madrid.es'` |
+| `fuente_id` | `bigint` | ID en la tabla de import correspondiente |
+| `descripcion_entidad` | `text` | Campo libre de Madrid open data |
+| `categoria_madrid` | `text` | URL path de categoría (solo fuente `datos.madrid.es`) |
+| `tipo_centro_normalizado` | `text` | **Normalizado en BD**: `PRIMARIA`, `SECUNDARIA`, `FP`, `ADULTOS`, `ESPECIAL`, `OTROS` |
+| `titularidad_normalizada` | `text` | **Normalizado en BD**: `PUBLICO`, `CONCERTADO`, `PRIVADO`, `OTRO` |
+
+**Unicidad:** índice `colegios_fuente_fuente_id_key` en `(fuente, fuente_id)`.
+
+### Normalización de tipo y titularidad
+
+Los campos `tipo_centro_normalizado` y `titularidad_normalizada` se poblaron desde las tablas de import con la siguiente prioridad de fuente:
+
+| Fuente | Tabla import | Join key | Campo tipo | Campo titularidad |
+|---|---|---|---|---|
+| `andalucia` | `colegios_import_andalucia` | `codigo` | `D_DENOMINA` | `D_TIPO` + cols `priv_c_*` |
+| `castilla_y_leon` | `colegios_import_castillayleon` | `"CÓDIGO"` | `"DENOMINACIÓN GENÉRICA BREVE"` | `"NATURALEZA"` + `"CONCIERTO"` |
+| `canarias` | `colegios_import_canarias` | `"Codigo"` | `"Denominacion"` | `"Naturaleza"` + `"Concierto"` |
+| `comunidad_madrid` | `centros_educativos_import_comunidad_madrid` | `centro_codigo` | `centro_tipo_desc_abreviada` | `centro_titularidad` |
+| `datos.madrid.es` | `colegios_import_madrid` | `"PK"` | `"TIPO"` (URL path) | inferido del `"TIPO"` |
+
+Si se añaden nuevas fuentes o se reimportan datos, aplicar los mismos UPDATEs con `UPDATE public.colegios SET ... FROM <tabla_import> WHERE fuente='...' AND fuente_id = <key>`.
+
+## RPC: `nearby_colegios`
+
+Función SQL en Supabase que devuelve los N centros más cercanos a un punto (Haversine).
+
+```sql
+-- Firma actual
+nearby_colegios(p_lat double precision, p_lon double precision, p_limit integer DEFAULT 50)
+
+-- Campos devueltos
+id, nombre, direccion, localidad, provincia, tipo, latitud, longitud, telefono,
+descripcion_entidad, tipo_centro_normalizado, titularidad_normalizada, distancia_metros
+```
+
+- **Sin parámetros de filtro**: la RPC no filtra por titularidad ni tipo; el filtrado lo aplica el cliente en `MapState.colegiosConDistancia`.
+- La app siempre llama con `p_limit = 50`.
+- Se invoca mediante `supabase.postgrest.rpc("nearby_colegios", params).decodeList<NearbyColegioDto>()`.
+
+## Modelo Kotlin
+
+### `Colegio` (dominio)
+```kotlin
+@Serializable
+data class Colegio(
+    val id: Int,
+    val nombre: String,
+    val direccion: String,
+    val localidad: String,
+    val tipo: String,
+    val latitud: Double,
+    val longitud: Double,
+    val telefono: String?
+)
+```
+
+### `NearbyColegioDto` (DTO de RPC)
+```kotlin
+@Serializable
+data class NearbyColegioDto(
+    val id: Int,
+    val nombre: String,
+    val direccion: String? = null,
+    val latitud: Double,
+    val longitud: Double,
+    val tipo: String? = null,
+    val localidad: String? = null,
+    val provincia: String? = null,
+    val telefono: String? = null,
+    @SerialName("descripcion_entidad")     val descripcionEntidad: String? = null,
+    @SerialName("tipo_centro_normalizado") val tipoCentroNormalizado: String? = null,
+    @SerialName("titularidad_normalizada") val titularidadNormalizada: String? = null,
+    @SerialName("distancia_metros")        val distanciaMetros: Double
+)
+```
+
+## Reglas de localización (app)
+- Usar `FusedLocationProvider` para ubicación.
+- Usar `Geocoder` nativo siempre que sea razonable.
+- Priorizar soluciones gratuitas frente a APIs externas de pago.
+- Mantener debounce de 300ms para autocompletado de direcciones.
+
+## Rendimiento y arquitectura de datos
+- Evitar cálculos pesados en el Main Thread.
+- Manejar errores de red con cuidado.
+- No duplicar lógica de acceso a Supabase en la UI.
+- Centralizar acceso a datos en ViewModel + cliente inyectado.
+
+## Persistencia futura
+- El roadmap contempla Room para favoritos y modo offline.
+- También contempla sincronización selectiva Room + Supabase.
+- Si una tarea toca persistencia, respetar esta dirección arquitectónica.
+- No introducir otra base de datos local diferente sin que se solicite explícitamente.
+
+## Seguridad
+- Las tablas en `public` expuestas a PostgREST deben tener RLS habilitado.
+- `colegios`: solo lectura para el rol de la app.
+- No exponer credenciales de servicio en el cliente.

@@ -7,4 +7,6 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Launcher adaptive icon: matches colefinder_icon_v1 reference (petrol blue) -->
+    <color name="ic_launcher_brand">#FF10345C</color>
 </resources>
