@@ -10,12 +10,16 @@ enum class TitularidadFiltro(val label: String) {
     CONCERTADO("Concertado"),
     PRIVADO("Privado");
 
-    /** Valor para el parámetro p_filtro_tipo de la RPC; null = sin restricción. */
+    /**
+     * Valor para el parámetro p_titularidad de la RPC.
+     * Debe coincidir exactamente con titularidad_normalizada en BD: PUBLICO, CONCERTADO, PRIVADO.
+     * Devuelve null cuando no hay restricción (TODOS).
+     */
     fun toRpcParam(): String? = when (this) {
         TODOS      -> null
-        PUBLICO    -> "Público"
-        CONCERTADO -> "Concertado"
-        PRIVADO    -> "Privado"
+        PUBLICO    -> "PUBLICO"
+        CONCERTADO -> "CONCERTADO"
+        PRIVADO    -> "PRIVADO"
     }
 }
 
@@ -28,7 +32,22 @@ enum class TipoCentroFiltro(val label: String) {
     FP("FP"),
     ADULTOS("Adultos"),
     ESPECIAL("Especial"),
-    OTROS("Otros")
+    OTROS("Otros");
+
+    /**
+     * Valor para el parámetro p_tipo de la RPC.
+     * Debe coincidir exactamente con tipo_centro_normalizado en BD.
+     * Devuelve null cuando no hay restricción (TODOS).
+     */
+    fun toRpcParam(): String? = when (this) {
+        TODOS      -> null
+        PRIMARIA   -> "PRIMARIA"
+        SECUNDARIA -> "SECUNDARIA"
+        FP         -> "FP"
+        ADULTOS    -> "ADULTOS"
+        ESPECIAL   -> "ESPECIAL"
+        OTROS      -> "OTROS"
+    }
 }
 
 enum class TipoCentroClasificado { PRIMARIA, SECUNDARIA, FP, ADULTOS, ESPECIAL, OTROS }

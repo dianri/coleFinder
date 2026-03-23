@@ -64,18 +64,25 @@ class MapViewModel @Inject constructor(
     }
 
     /**
-     * Carga los 50 centros más cercanos al punto dado.
-     * No filtra por titularidad en la RPC: el filtrado de titularidad y tipo
-     * se aplica en cliente desde MapState.colegiosConDistancia, soportando multiselección.
+     * Carga los N centros más cercanos al punto dado.
+     * Si hay una única titularidad o tipo seleccionado, lo envía al servidor via RPC.
+     * Si hay multiselección o TODOS, el servidor devuelve sin restricción y el cliente
+     * filtra como fallback en MapState.colegiosConDistancia.
      */
     fun loadNearbyColegios(lat: Double, lon: Double) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
+                val filtros = _state.value
+                val pTitularidad = singleTitularidadParam(filtros.filtrosTitularidad)
+                val pTipo = singleTipoParam(filtros.filtrosTipoCentro)
+
                 val params = buildJsonObject {
                     put("p_lat", lat)
                     put("p_lon", lon)
                     put("p_limit", 50)
+                    pTitularidad?.let { put("p_titularidad", it) }
+                    pTipo?.let { put("p_tipo", it) }
                 }
                 val dtos = supabase.postgrest
                     .rpc("nearby_colegios", params)
@@ -101,6 +108,24 @@ class MapViewModel @Inject constructor(
                 _state.update { it.copy(error = e.localizedMessage, isLoading = false) }
             }
         }
+    }
+
+    /**
+     * Devuelve el param RPC de titularidad solo si hay UNA única opción concreta activa.
+     * Si hay TODOS o más de una selección, devuelve null (sin filtro en servidor).
+     */
+    private fun singleTitularidadParam(filtros: Set<TitularidadFiltro>): String? {
+        if (TitularidadFiltro.TODOS in filtros || filtros.size != 1) return null
+        return filtros.first().toRpcParam()
+    }
+
+    /**
+     * Devuelve el param RPC de tipo de centro solo si hay UNA única opción concreta activa.
+     * Si hay TODOS o más de una selección, devuelve null (sin filtro en servidor).
+     */
+    private fun singleTipoParam(filtros: Set<TipoCentroFiltro>): String? {
+        if (TipoCentroFiltro.TODOS in filtros || filtros.size != 1) return null
+        return filtros.first().toRpcParam()
     }
 
     fun onSearchQueryChanged(query: String, context: Context) {
@@ -184,18 +209,30 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    /** Alterna una opción de titularidad respetando la lógica de "Todos". Sin recarga RPC. */
+    /** Alterna una opción de titularidad. Si el nuevo estado tiene selección única,
+     *  recarga el RPC para que el servidor filtre; si es multi o TODOS, recarga sin filtro
+     *  y el cliente aplica el fallback. */
     fun toggleFiltroTitularidad(filtro: TitularidadFiltro) {
         _state.update { it.copy(
             filtrosTitularidad = toggleTitularidad(it.filtrosTitularidad, filtro)
         )}
+        reloadWithCurrentFilters()
     }
 
-    /** Alterna una opción de tipo de centro respetando la lógica de "Todos". Sin recarga RPC. */
+    /** Alterna una opción de tipo de centro. Misma lógica de recarga que titularidad. */
     fun toggleFiltroTipoCentro(filtro: TipoCentroFiltro) {
         _state.update { it.copy(
             filtrosTipoCentro = toggleTipoCentro(it.filtrosTipoCentro, filtro)
         )}
+        reloadWithCurrentFilters()
+    }
+
+    /** Recarga los colegios cercanos respecto al punto activo actualmente. */
+    private fun reloadWithCurrentFilters() {
+        val punto = _state.value.puntoReferencia ?: _state.value.userLocation
+        val lat   = punto?.latitude  ?: DEFAULT_LAT
+        val lon   = punto?.longitude ?: DEFAULT_LON
+        loadNearbyColegios(lat, lon)
     }
 
     fun buscarDireccion(query: String, context: Context) {
