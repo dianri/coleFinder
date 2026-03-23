@@ -7,7 +7,7 @@ import es.colefinder.data.model.Colegio
 
 data class MapState(
     val isLoading: Boolean = false,
-    val colegios: List<Colegio> = emptyList(),
+    val colegiosCercanos: List<ColegioConDistancia> = emptyList(),
     val suggestions: List<SearchSuggestion> = emptyList(),
     val error: String? = null,
     val userLocation: LatLng? = null,
@@ -18,29 +18,8 @@ data class MapState(
         position = CameraPosition.fromLatLngZoom(LatLng(40.4168, -3.7038), 6f)
     )
 ) {
-    // Computed list of up to 50 colegios with their distance to the reference point (or user location/Madrid as fallback)
-    // We apply distinctBy here as well just to be 100% safe against UI duplication bugs
     val colegiosConDistancia: List<ColegioConDistancia>
-        get() {
-            val reference = puntoReferencia ?: userLocation ?: LatLng(40.4168, -3.7038)
-            
-            return colegios
-                .distinctBy { it.id }
-                .filter { colegio ->
-                    filtroSeleccionado == "Todos" || colegio.tipo.contains(filtroSeleccionado, ignoreCase = true)
-                }
-                .map { colegio ->
-                    val results = FloatArray(1)
-                    android.location.Location.distanceBetween(
-                        reference.latitude, reference.longitude,
-                        colegio.latitud, colegio.longitud,
-                        results
-                    )
-                    ColegioConDistancia(colegio, results[0].toDouble())
-                }
-                .sortedBy { it.distanciaMetros }
-                .take(50)
-        }
+        get() = colegiosCercanos
 }
 
 data class SearchSuggestion(

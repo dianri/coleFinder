@@ -2,6 +2,7 @@ package es.colefinder.ui.map
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.util.Log
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -115,6 +116,33 @@ fun MapScreen(
             compassEnabled = true,
             mapToolbarEnabled = false
         )
+    }
+
+    // Carga inicial: usa ubicación real si el permiso ya está concedido; si falla en cualquier punto,
+    // el ViewModel cae al fallback por defecto (Madrid). Se ejecuta exactamente una vez.
+    LaunchedEffect(Unit) {
+        if (locationPermissionsState.allPermissionsGranted) {
+            try {
+                fusedLocationClient.lastLocation
+                    .addOnSuccessListener { location ->
+                        val latLng = location?.let {
+                            com.google.android.gms.maps.model.LatLng(it.latitude, it.longitude)
+                        }
+                        Log.d("MapScreen", "Startup: lastLocation=$latLng")
+                        viewModel.initializeMap(latLng)
+                    }
+                    .addOnFailureListener { e ->
+                        Log.w("MapScreen", "Startup: lastLocation falló (${e.message}), usando por defecto")
+                        viewModel.initializeMap(null)
+                    }
+            } catch (e: Exception) {
+                Log.w("MapScreen", "Startup: excepción obteniendo ubicación (${e.message}), usando por defecto")
+                viewModel.initializeMap(null)
+            }
+        } else {
+            Log.d("MapScreen", "Startup: sin permiso de ubicación, cargando por defecto")
+            viewModel.initializeMap(null)
+        }
     }
 
     Scaffold(
@@ -254,7 +282,7 @@ fun MapScreen(
 
                     // Sugerencias de colegios si el Geocoder está vacío o como complemento
                     if (searchQuery.isNotEmpty()) {
-                        val filteredColegios = state.colegios.filter { 
+                        val filteredColegios = state.colegiosCercanos.map { it.colegio }.filter {
                             it.nombre.contains(searchQuery, ignoreCase = true)
                         }.take(5)
                         
