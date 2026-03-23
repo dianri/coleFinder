@@ -13,13 +13,26 @@ data class MapState(
     val userLocation: LatLng? = null,
     val puntoReferencia: LatLng? = null,
     val selectedColegio: Colegio? = null,
-    val filtroSeleccionado: String = "Todos",
+    // Sets vacíos no son válidos: siempre contienen al menos TODOS u opciones concretas.
+    val filtrosTitularidad: Set<TitularidadFiltro> = setOf(TitularidadFiltro.TODOS),
+    val filtrosTipoCentro: Set<TipoCentroFiltro> = setOf(TipoCentroFiltro.TODOS),
     val cameraPosition: CameraPositionState = CameraPositionState(
         position = CameraPosition.fromLatLngZoom(LatLng(40.4168, -3.7038), 6f)
     )
 ) {
+    /**
+     * Lista final para marcadores y panel lateral.
+     * Usa titularidadNormalizada (BD) cuando está disponible; fallback a tipo (texto libre).
+     */
     val colegiosConDistancia: List<ColegioConDistancia>
-        get() = colegiosCercanos
+        get() = colegiosCercanos.filter { item ->
+            matchesTitularidadNormalizadaFiltros(
+                titularidadNormalizada = item.titularidadNormalizada,
+                tipoRaw                = item.colegio.tipo,
+                filtros                = filtrosTitularidad
+            ) &&
+            item.tipoCentroClasificado.matchesFiltros(filtrosTipoCentro)
+        }
 }
 
 data class SearchSuggestion(
@@ -30,5 +43,7 @@ data class SearchSuggestion(
 
 data class ColegioConDistancia(
     val colegio: Colegio,
-    val distanciaMetros: Double
+    val distanciaMetros: Double,
+    val tipoCentroClasificado: TipoCentroClasificado = TipoCentroClasificado.OTROS,
+    val titularidadNormalizada: String? = null
 )

@@ -1,9 +1,6 @@
 ---
-description: Reglas de datos, red y modelo de ColeFinder
-globs:
 alwaysApply: true
 ---
-
 # ColeFinder - Datos y Supabase
 
 ## Stack de datos
@@ -13,87 +10,99 @@ alwaysApply: true
 - Cliente centralizado: `SupabaseClient`.
 - Configuración de red: `NetworkModule`.
 
-## Tablas y roles (lectura vs importación)
+## Tabla principal: `public.colegios`
 
-### `colegios` (tabla final para la app)
-- Es la **única tabla de lectura** que debe usar la app cliente para listar/mapar centros (`postgrest["colegios"]` o equivalente).
-- **Solo lectura desde el cliente** (anon/authenticated vía políticas): la app **no** debe hacer `insert`/`update`/`delete` sobre `colegios` salvo requisito explícito y cambio de políticas acordado.
-- Los datos se poblan con **jobs de importación / SQL / Edge Functions** en servidor, no desde la UI.
+Es la **única tabla de lectura** que usa la app. La app no hace `insert`/`update`/`delete` sobre ella; los datos se poblan desde jobs/scripts en servidor.
 
-### `colegios_import_madrid` (tabla temporal de importación)
-- Tabla **de staging** para cargar el CSV del catálogo de Madrid tal cual (columnas con nombres tipo `NOMBRE`, `PK`, `DESCRIPCION-ENTIDAD`, `CONTENT-URL`, coordenadas, etc.).
-- **No** es el origen de lectura de la app; solo sirve para importar, revisar y transformar antes de volcar a `colegios`.
-- Tras una importación validada, puede vaciarse o truncarse según el procedimiento acordado (fuera del alcance de la app móvil).
+### Columnas relevantes para la app
 
-## Esquema actual de `public.colegios` (Postgres)
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `integer` | PK serial |
+| `nombre` | `text` | Nombre visible del centro |
+| `direccion` | `text` | Dirección completa |
+| `latitud` | `double precision` | |
+| `longitud` | `double precision` | |
+| `tipo` | `text` | Texto libre de titularidad (inconsistente entre fuentes; usar `titularidad_normalizada` preferentemente) |
+| `localidad` | `text` | |
+| `provincia` | `text` | |
+| `telefono` | `text` | |
+| `fuente` | `text` | Origen: `'andalucia'`, `'castilla_y_leon'`, `'canarias'`, `'comunidad_madrid'`, `'datos.madrid.es'` |
+| `fuente_id` | `bigint` | ID en la tabla de import correspondiente |
+| `descripcion_entidad` | `text` | Campo libre de Madrid open data |
+| `categoria_madrid` | `text` | URL path de categoría (solo fuente `datos.madrid.es`) |
+| `tipo_centro_normalizado` | `text` | **Normalizado en BD**: `PRIMARIA`, `SECUNDARIA`, `FP`, `ADULTOS`, `ESPECIAL`, `OTROS` |
+| `titularidad_normalizada` | `text` | **Normalizado en BD**: `PUBLICO`, `CONCERTADO`, `PRIVADO`, `OTRO` |
 
-Orden lógico por uso en app vs metadatos de importación:
+**Unicidad:** índice `colegios_fuente_fuente_id_key` en `(fuente, fuente_id)`.
 
-| Columna | Tipo | Nullable | Notas |
-|---------|------|----------|--------|
-| `id` | `integer` | NO | PK, `serial` |
-| `nombre` | `text` | NO | |
-| `direccion` | `text` | YES | En app Kotlin puede mapearse a `String`; conviene normalizar en ingestión |
-| `latitud` | `double precision` | NO | |
-| `longitud` | `double precision` | NO | |
-| `tipo` | `text` | YES | Default en BD: `'Público'` |
-| `localidad` | `text` | YES | |
-| `telefono` | `text` | YES | |
-| `fuente` | `text` | YES | Identificador de procedencia (p. ej. dataset Madrid) |
-| `fuente_id` | `bigint` | YES | ID estable en la fuente (p. ej. `PK` del CSV Madrid) |
-| `descripcion_entidad` | `text` | YES | De import Madrid |
-| `descripcion` | `text` | YES | |
-| `content_url` | `text` | YES | |
-| `clase_vial` | `text` | YES | |
-| `nombre_via` | `text` | YES | |
-| `tipo_num` | `text` | YES | |
-| `num` | `text` | YES | |
-| `codigo_postal` | `text` | YES | |
-| `provincia` | `text` | YES | |
-| `barrio` | `text` | YES | |
-| `cod_barrio` | `integer` | YES | |
-| `distrito` | `text` | YES | |
-| `cod_distrito` | `integer` | YES | |
-| `fax` | `text` | YES | |
-| `email` | `text` | YES | |
-| `accesibilidad` | `smallint` | YES | |
-| `categoria_madrid` | `text` | YES | |
+### Normalización de tipo y titularidad
 
-**Índices / unicidad (estado real en BD):**
-- `PRIMARY KEY` (`id`)
-- Índice único **`colegios_fuente_fuente_id_key`** en `(fuente, fuente_id)` — al insertar/actualizar, evitar colisiones en ese par; nota: en Postgres, filas con `NULL` en columnas del índice único se comportan según reglas de unicidad con NULL (definir política de ingestión para filas sin `fuente`/`fuente_id`).
+Los campos `tipo_centro_normalizado` y `titularidad_normalizada` se poblaron desde las tablas de import con la siguiente prioridad de fuente:
 
-## Esquema de `public.colegios_import_madrid` (staging)
+| Fuente | Tabla import | Join key | Campo tipo | Campo titularidad |
+|---|---|---|---|---|
+| `andalucia` | `colegios_import_andalucia` | `codigo` | `D_DENOMINA` | `D_TIPO` + cols `priv_c_*` |
+| `castilla_y_leon` | `colegios_import_castillayleon` | `"CÓDIGO"` | `"DENOMINACIÓN GENÉRICA BREVE"` | `"NATURALEZA"` + `"CONCIERTO"` |
+| `canarias` | `colegios_import_canarias` | `"Codigo"` | `"Denominacion"` | `"Naturaleza"` + `"Concierto"` |
+| `comunidad_madrid` | `centros_educativos_import_comunidad_madrid` | `centro_codigo` | `centro_tipo_desc_abreviada` | `centro_titularidad` |
+| `datos.madrid.es` | `colegios_import_madrid` | `"PK"` | `"TIPO"` (URL path) | inferido del `"TIPO"` |
 
-Tabla alineada con columnas del CSV de Madrid (nombres con mayúsculas/guiones). Incluye entre otras: `PK`, `NOMBRE`, `DESCRIPCION-ENTIDAD`, `HORARIO`, `EQUIPAMIENTO`, `TRANSPORTE`, `DESCRIPCION`, `ACCESIBILIDAD`, `CONTENT-URL`, `NOMBRE-VIA`, `CLASE-VIAL`, `TIPO-NUM`, `NUM`, `PLANTA`, `PUERTA`, `ESCALERAS`, `ORIENTACION`, `LOCALIDAD`, `PROVINCIA`, `CODIGO-POSTAL`, `COD-BARRIO`, `BARRIO`, `COD-DISTRITO`, `DISTRITO`, `COORDENADA-X`, `COORDENADA-Y`, `LATITUD`, `LONGITUD`, `TELEFONO`, `FAX`, `EMAIL`, `TIPO`.
+Si se añaden nuevas fuentes o se reimportan datos, aplicar los mismos UPDATEs con `UPDATE public.colegios SET ... FROM <tabla_import> WHERE fuente='...' AND fuente_id = <key>`.
 
-## Modelo Kotlin `Colegio` (app)
+## RPC: `nearby_colegios`
 
-La entidad `Colegio` debe seguir siendo `@Serializable` y mapear **como mínimo** los campos que consume la UI hoy:
-- `id`: Int
-- `nombre`: String
-- `direccion`: String
-- `localidad`: String
-- `tipo`: String
-- `latitud`: Double
-- `longitud`: Double
-- `telefono`: String?
+Función SQL en Supabase que devuelve los N centros más cercanos a un punto (Haversine).
 
-Las columnas extra de `colegios` en Supabase existen para **trazabilidad y enriquecimiento** (Madrid y otras fuentes). Si la app necesita exponer alguna, se añade al modelo **de forma explícita** y alineada con PostgREST (sin inventar nombres de columna).
+```sql
+-- Firma actual
+nearby_colegios(p_lat double precision, p_lon double precision, p_limit integer DEFAULT 50)
 
-## Reglas de importación y normalización
+-- Campos devueltos
+id, nombre, direccion, localidad, provincia, tipo, latitud, longitud, telefono,
+descripcion_entidad, tipo_centro_normalizado, titularidad_normalizada, distancia_metros
+```
 
-1. **CSV**: siempre **UTF-8** (sin BOM problemático; validar caracteres españoles: tildes, ñ).
-2. **Flujo**: cargar en `colegios_import_madrid` → validar/transformar → insertar/actualizar en `colegios` con columnas normalizadas (`direccion`, `latitud`/`longitud`, `tipo`, `localidad`, etc.).
-3. **Duplicados**: usar **`fuente` + `fuente_id`** como clave lógica de origen; respetar el índice único existente en BD. Para registros sin fuente externa, definir política explícita (no improvisar desde la app).
-4. **Deduplicación en app**: además de la unicidad en servidor, antes de actualizar estado con listas: `.distinctBy { it.id }`.
-5. **La UI no escribe en Supabase** directamente: ningún `insert`/`update`/`delete` desde Composables; toda escritura futura pasaría por capa de datos/repositorio y políticas acordadas.
+- **Sin parámetros de filtro**: la RPC no filtra por titularidad ni tipo; el filtrado lo aplica el cliente en `MapState.colegiosConDistancia`.
+- La app siempre llama con `p_limit = 50`.
+- Se invoca mediante `supabase.postgrest.rpc("nearby_colegios", params).decodeList<NearbyColegioDto>()`.
 
-## Seguridad (Supabase / Postgres)
+## Modelo Kotlin
 
-- Las tablas del schema **`public` expuestas a PostgREST deben tener RLS habilitado** y políticas explícitas (`SELECT` mínimo para lo que necesite el cliente).
-- `colegios`: diseñar políticas como **solo lectura** para el rol que usa la app, salvo proyecto explícito de escritura.
-- No exponer credenciales de servicio en el cliente; operaciones batch de importación con privilegios elevados solo en backend/script seguro.
+### `Colegio` (dominio)
+```kotlin
+@Serializable
+data class Colegio(
+    val id: Int,
+    val nombre: String,
+    val direccion: String,
+    val localidad: String,
+    val tipo: String,
+    val latitud: Double,
+    val longitud: Double,
+    val telefono: String?
+)
+```
+
+### `NearbyColegioDto` (DTO de RPC)
+```kotlin
+@Serializable
+data class NearbyColegioDto(
+    val id: Int,
+    val nombre: String,
+    val direccion: String? = null,
+    val latitud: Double,
+    val longitud: Double,
+    val tipo: String? = null,
+    val localidad: String? = null,
+    val provincia: String? = null,
+    val telefono: String? = null,
+    @SerialName("descripcion_entidad")     val descripcionEntidad: String? = null,
+    @SerialName("tipo_centro_normalizado") val tipoCentroNormalizado: String? = null,
+    @SerialName("titularidad_normalizada") val titularidadNormalizada: String? = null,
+    @SerialName("distancia_metros")        val distanciaMetros: Double
+)
+```
 
 ## Reglas de localización (app)
 - Usar `FusedLocationProvider` para ubicación.
@@ -105,7 +114,7 @@ Las columnas extra de `colegios` en Supabase existen para **trazabilidad y enriq
 - Evitar cálculos pesados en el Main Thread.
 - Manejar errores de red con cuidado.
 - No duplicar lógica de acceso a Supabase en la UI.
-- Centralizar acceso a datos en la capa adecuada (p. ej. ViewModel + cliente inyectado).
+- Centralizar acceso a datos en ViewModel + cliente inyectado.
 
 ## Persistencia futura
 - El roadmap contempla Room para favoritos y modo offline.
@@ -113,7 +122,7 @@ Las columnas extra de `colegios` en Supabase existen para **trazabilidad y enriq
 - Si una tarea toca persistencia, respetar esta dirección arquitectónica.
 - No introducir otra base de datos local diferente sin que se solicite explícitamente.
 
-## Reglas de implementación
-- Si se cambian consultas o mapeos, mantener compatibilidad con `Colegio` o ampliar el modelo de forma coordinada con el esquema real.
-- Si se introduce caching o favoritos, separarlo claramente del acceso remoto.
-- No romper la single source of truth del estado en `MapState` / `MapViewModel`.
+## Seguridad
+- Las tablas en `public` expuestas a PostgREST deben tener RLS habilitado.
+- `colegios`: solo lectura para el rol de la app.
+- No exponer credenciales de servicio en el cliente.

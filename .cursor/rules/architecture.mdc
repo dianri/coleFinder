@@ -20,29 +20,66 @@ alwaysApply: true
 - Mantener arquitectura MVVM con flujo unidireccional de estado.
 - Toda lógica de datos debe integrarse en `MapState`.
 - El ViewModel principal es `MapViewModel`.
-- **Supabase:** la tabla `colegios` es el origen de lectura de centros; la app cliente no debe escribir en Supabase desde la UI salvo petición explícita del proyecto (ver `.cursor/rules/data-supabase.mdc`).
+- Sin escrituras directas a Supabase desde composables: toda escritura pasa por ViewModel; `colegios` es solo lectura (detalle en `data-supabase.mdc`).
 - Evitar refactors grandes si no son necesarios para la tarea.
 - Hacer cambios mínimos, coherentes y compilables.
 
 ## Estado y flujo
-- `MapState` gestiona:
-  - `isLoading`
-  - `colegiosConDistancia`
-  - `userLocation`
-  - `filtroSeleccionado`
-  - `cameraPositionState`
-- `MapViewModel` se encarga de:
-  - Fetch desde Supabase
-  - Geocoder con debounce de 300ms
-  - Ordenación por distancia
-  - Preparación de estado para la UI
+
+### `MapState`
+```kotlin
+data class MapState(
+    val isLoading: Boolean,
+    val colegiosCercanos: List<ColegioConDistancia>,   // resultado bruto de la RPC
+    val suggestions: List<SearchSuggestion>,
+    val error: String?,
+    val userLocation: LatLng?,
+    val puntoReferencia: LatLng?,
+    val selectedColegio: Colegio?,
+    val filtrosTitularidad: Set<TitularidadFiltro>,    // multiselección; nunca vacío
+    val filtrosTipoCentro: Set<TipoCentroFiltro>,      // multiselección; nunca vacío
+    val cameraPosition: CameraPositionState
+) {
+    val colegiosConDistancia: List<ColegioConDistancia>  // getter: aplica ambos filtros en cliente
+}
+
+data class ColegioConDistancia(
+    val colegio: Colegio,
+    val distanciaMetros: Double,
+    val tipoCentroClasificado: TipoCentroClasificado,  // derivado de BD + fallback cliente
+    val titularidadNormalizada: String?                 // campo normalizado de BD (PUBLICO/CONCERTADO/PRIVADO)
+)
+```
+
+### `MapViewModel` — responsabilidades
+- `initializeMap(userLatLng: LatLng?)`: carga inicial única (flag `initialized`); usa ubicación del usuario o Madrid por defecto.
+- `loadNearbyColegios(lat, lon)`: llama a la RPC `nearby_colegios`; sin parámetros de filtro (el filtrado es cliente).
+- Geocoder con debounce de 300 ms (`onSearchQueryChanged`).
+- `toggleFiltroTitularidad` / `toggleFiltroTipoCentro`: actualizan sets de filtros sin recargar la RPC.
+- `moverAColegio`: solo cámara + selección, nunca recarga datos.
+
+### Flujo de filtros (cliente)
+La RPC devuelve siempre los 50 centros más cercanos sin restricción de tipo ni titularidad.
+El getter `colegiosConDistancia` en `MapState` aplica ambos grupos de filtros en memoria.
+Cambiar un filtro **no** provoca una nueva llamada a Supabase.
+
+## Archivos clave del dominio de mapa
+
+| Archivo | Rol |
+|---|---|
+| `MapState.kt` | Estado UI + getter de filtrado |
+| `MapViewModel.kt` | Lógica de negocio, fetch RPC, geocoder |
+| `MapScreen.kt` | UI Compose principal |
+| `CentroFiltros.kt` | Enums de filtros, clasificación de tipo, colores, toggle logic |
+| `NearbyColegioDto.kt` | DTO de deserialización de la RPC |
+| `Colegio.kt` | Modelo de dominio |
 
 ## Reglas de calidad
 - No inventar clases, funciones ni nombres de propiedades si no existen en el proyecto.
 - Antes de proponer cambios grandes, resumir qué archivos se tocarán.
 - Priorizar cambios pequeños antes que reescrituras completas.
 - Si falta contexto, pedir aclaración antes de modificar arquitectura.
-- No mover lógica al Main Thread si puede ser costosa.
+- No mover lógica costosa al Main Thread.
 - Mantener compatibilidad con Hilt, Compose y Supabase SDK.
 
 ## Deduplicación obligatoria

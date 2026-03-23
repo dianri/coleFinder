@@ -3,6 +3,9 @@ package es.colefinder.ui.map
 import android.Manifest
 import android.annotation.SuppressLint
 import android.util.Log
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -207,7 +210,7 @@ fun MapScreen(
                     val colegio = colegioConDist.colegio
                     key(colegio.id) {
                         val numberLabel = (index + 1).toString()
-                        val markerColor = if (colegio.tipo.contains("Público", true)) Color(0xFF4CAF50) else Color(0xFF2196F3)
+                        val markerColor = colorParaTitularidad(colegio.tipo, colegioConDist.titularidadNormalizada)
 
                         val icon = remember(colegio.id, numberLabel, markerColor, state.puntoReferencia) {
                             createNumberedMarkerBitmap(context, numberLabel, markerColor)
@@ -311,7 +314,7 @@ fun MapScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(16.dp)
-                    .padding(bottom = 80.dp)
+                    .padding(bottom = 160.dp)
             ) {
                 state.selectedColegio?.let { colegio ->
                     ColegioDetailCard(
@@ -357,7 +360,8 @@ fun MapScreen(
             ) {
                 BottomSheetContent(
                     state = state,
-                    onFilterChange = { viewModel.setFiltro(it) },
+                    onFiltroTitularidadChange = { viewModel.toggleFiltroTitularidad(it) },
+                    onFiltroTipoCentroChange  = { viewModel.toggleFiltroTipoCentro(it) },
                     onColegioClick = { colegio ->
                         scope.launch { sheetState.hide() }.invokeOnCompletion {
                             if (!sheetState.isVisible) {
@@ -395,7 +399,7 @@ fun ColegioDetailCard(
                         fontWeight = FontWeight.Bold
                     )
                     Badge(
-                        containerColor = if (colegio.tipo.contains("Público", true)) Color(0xFF4CAF50) else Color(0xFF2196F3),
+                        containerColor = colorParaTitularidad(colegio.tipo),
                         modifier = Modifier.padding(top = 4.dp)
                     ) {
                         Text(colegio.tipo, color = Color.White, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
@@ -443,41 +447,44 @@ fun ColegioDetailCard(
 @Composable
 fun BottomSheetContent(
     state: MapState,
-    onFilterChange: (String) -> Unit,
+    onFiltroTitularidadChange: (TitularidadFiltro) -> Unit,
+    onFiltroTipoCentroChange: (TipoCentroFiltro) -> Unit,
     onColegioClick: (Colegio) -> Unit
 ) {
     val listState = rememberLazyListState()
-    val categorias = listOf("Todos", "Público", "Concertado")
 
-    LaunchedEffect(state.filtroSeleccionado) {
+    LaunchedEffect(state.filtrosTitularidad, state.filtrosTipoCentro) {
         listState.scrollToItem(0)
     }
 
     Column(modifier = Modifier.padding(bottom = 32.dp)) {
         Text(
-            text = "Colegios cercanos",
+            text = "Centros cercanos",
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(16.dp)
         )
-        
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            categorias.forEach { categoria ->
-                val selected = state.filtroSeleccionado == categoria
-                FilterChip(
-                    selected = selected,
-                    onClick = { onFilterChange(categoria) },
-                    label = { Text(categoria) },
-                    leadingIcon = if (selected) {
-                        { Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                    } else null,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-            }
-        }
+
+        FiltroChipRow(
+            titulo = "Titularidad",
+            opciones = TitularidadFiltro.entries,
+            seleccionados = state.filtrosTitularidad,
+            etiqueta = { it.label },
+            colorChip = { colorParaTitularidadFiltro(it) },
+            onSeleccionar = onFiltroTitularidadChange
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        FiltroChipRow(
+            titulo = "Tipo de centro",
+            opciones = TipoCentroFiltro.entries,
+            seleccionados = state.filtrosTipoCentro,
+            etiqueta = { it.label },
+            colorChip = { colorParaTipoCentroFiltro(it) },
+            onSeleccionar = onFiltroTipoCentroChange
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         if (state.colegiosConDistancia.isEmpty()) {
             Box(
@@ -487,7 +494,7 @@ fun BottomSheetContent(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No hay colegios de este tipo cerca de ti",
+                    text = "No hay centros de este tipo cerca de ti",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -506,31 +513,89 @@ fun BottomSheetContent(
                     } else {
                         "${dist.toInt()} m"
                     }
-                    
+
                     ListItem(
                         leadingContent = {
-                            Badge(
-                                containerColor = if (colegio.tipo.contains("Público", true)) Color(0xFF4CAF50) else Color(0xFF2196F3)
-                            ) {
+                            Badge(containerColor = colorParaTitularidad(colegio.tipo, item.titularidadNormalizada)) {
                                 Text((index + 1).toString(), color = Color.White)
                             }
                         },
-                        headlineContent = { 
-                            Text(colegio.nombre, fontWeight = FontWeight.Bold) 
+                        headlineContent = {
+                            Text(colegio.nombre, fontWeight = FontWeight.Bold)
                         },
-                        supportingContent = { 
+                        supportingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("A $distText de ti")
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(colegio.tipo, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                Text(
+                                    colegio.tipo,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
                         },
-                        modifier = Modifier.clickable {
-                            onColegioClick(colegio)
-                        }
+                        modifier = Modifier.clickable { onColegioClick(colegio) }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> FiltroChipRow(
+    titulo: String,
+    opciones: List<T>,
+    seleccionados: Set<T>,
+    etiqueta: (T) -> String,
+    colorChip: (T) -> Color,
+    onSeleccionar: (T) -> Unit
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Text(
+            text = titulo,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            opciones.forEach { opcion ->
+                val selected = opcion in seleccionados
+                val color = colorChip(opcion)
+                FilterChip(
+                    selected = selected,
+                    onClick = { onSeleccionar(opcion) },
+                    label = { Text(etiqueta(opcion)) },
+                    leadingIcon = if (selected) {
+                        {
+                            Icon(
+                                Icons.Default.Done,
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        }
+                    } else null,
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = color.copy(alpha = 0.12f),
+                        labelColor = color,
+                        selectedContainerColor = color,
+                        selectedLabelColor = Color.White,
+                        selectedLeadingIconColor = Color.White
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = selected,
+                        borderColor = color.copy(alpha = 0.5f),
+                        selectedBorderColor = Color.Transparent
+                    )
+                )
             }
         }
     }

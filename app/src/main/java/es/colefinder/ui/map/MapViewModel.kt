@@ -49,21 +49,26 @@ class MapViewModel @Inject constructor(
         _state.update { it.copy(isLoading = true) }
 
         if (userLatLng != null) {
-            Log.d(TAG, "initializeMap: ubicación del usuario disponible (${userLatLng.latitude}, ${userLatLng.longitude})")
+            Log.d(TAG, "initializeMap: ubicación disponible (${userLatLng.latitude}, ${userLatLng.longitude})")
             viewModelScope.launch {
                 _state.update { it.copy(userLocation = userLatLng) }
                 _state.value.cameraPosition.animate(
                     CameraUpdateFactory.newLatLngZoom(userLatLng, 15f)
                 )
-                loadNearbyColegios(userLatLng.latitude, userLatLng.longitude, _state.value.filtroSeleccionado)
+                loadNearbyColegios(userLatLng.latitude, userLatLng.longitude)
             }
         } else {
             Log.d(TAG, "initializeMap: sin ubicación, cargando posición por defecto (Madrid)")
-            loadNearbyColegios(DEFAULT_LAT, DEFAULT_LON, _state.value.filtroSeleccionado)
+            loadNearbyColegios(DEFAULT_LAT, DEFAULT_LON)
         }
     }
 
-    fun loadNearbyColegios(lat: Double, lon: Double, filtroTipo: String) {
+    /**
+     * Carga los 50 centros más cercanos al punto dado.
+     * No filtra por titularidad en la RPC: el filtrado de titularidad y tipo
+     * se aplica en cliente desde MapState.colegiosConDistancia, soportando multiselección.
+     */
+    fun loadNearbyColegios(lat: Double, lon: Double) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
@@ -71,16 +76,25 @@ class MapViewModel @Inject constructor(
                     put("p_lat", lat)
                     put("p_lon", lon)
                     put("p_limit", 50)
-                    if (filtroTipo.isNotBlank() && filtroTipo != "Todos") {
-                        put("p_filtro_tipo", filtroTipo)
-                    }
                 }
                 val dtos = supabase.postgrest
                     .rpc("nearby_colegios", params)
                     .decodeList<NearbyColegioDto>()
                 val cercanos = dtos
                     .distinctBy { it.id }
-                    .map { dto -> ColegioConDistancia(dto.toColegio(), dto.distanciaMetros) }
+                    .map { dto ->
+                        ColegioConDistancia(
+                            colegio = dto.toColegio(),
+                            distanciaMetros = dto.distanciaMetros,
+                            tipoCentroClasificado = clasificarTipoCentro(
+                                nombre                = dto.nombre,
+                                tipo                  = dto.tipo ?: "",
+                                descripcionEntidad    = dto.descripcionEntidad,
+                                tipoCentroNormalizado = dto.tipoCentroNormalizado
+                            ),
+                            titularidadNormalizada = dto.titularidadNormalizada
+                        )
+                    }
                 _state.update { it.copy(colegiosCercanos = cercanos, isLoading = false) }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -125,11 +139,7 @@ class MapViewModel @Inject constructor(
             _state.value.cameraPosition.animate(
                 CameraUpdateFactory.newLatLngZoom(suggestion.latLng, 15f)
             )
-            loadNearbyColegios(
-                suggestion.latLng.latitude,
-                suggestion.latLng.longitude,
-                _state.value.filtroSeleccionado
-            )
+            loadNearbyColegios(suggestion.latLng.latitude, suggestion.latLng.longitude)
         }
     }
 
@@ -139,13 +149,13 @@ class MapViewModel @Inject constructor(
             _state.value.cameraPosition.animate(
                 CameraUpdateFactory.newLatLngZoom(latLng, 15f)
             )
-            loadNearbyColegios(latLng.latitude, latLng.longitude, _state.value.filtroSeleccionado)
+            loadNearbyColegios(latLng.latitude, latLng.longitude)
         }
     }
 
     fun onMapLongClick(latLng: LatLng) {
         _state.update { it.copy(puntoReferencia = latLng, selectedColegio = null) }
-        loadNearbyColegios(latLng.latitude, latLng.longitude, _state.value.filtroSeleccionado)
+        loadNearbyColegios(latLng.latitude, latLng.longitude)
     }
 
     fun onColegioClick(colegio: Colegio) {
@@ -161,12 +171,18 @@ class MapViewModel @Inject constructor(
         _state.update { it.copy(selectedColegio = null) }
     }
 
-    fun setFiltro(tipo: String) {
-        _state.update { it.copy(filtroSeleccionado = tipo) }
-        val ref = _state.value.puntoReferencia
-            ?: _state.value.userLocation
-            ?: LatLng(DEFAULT_LAT, DEFAULT_LON)
-        loadNearbyColegios(ref.latitude, ref.longitude, tipo)
+    /** Alterna una opción de titularidad respetando la lógica de "Todos". Sin recarga RPC. */
+    fun toggleFiltroTitularidad(filtro: TitularidadFiltro) {
+        _state.update { it.copy(
+            filtrosTitularidad = toggleTitularidad(it.filtrosTitularidad, filtro)
+        )}
+    }
+
+    /** Alterna una opción de tipo de centro respetando la lógica de "Todos". Sin recarga RPC. */
+    fun toggleFiltroTipoCentro(filtro: TipoCentroFiltro) {
+        _state.update { it.copy(
+            filtrosTipoCentro = toggleTipoCentro(it.filtrosTipoCentro, filtro)
+        )}
     }
 
     fun buscarDireccion(query: String, context: Context) {
@@ -187,8 +203,8 @@ class MapViewModel @Inject constructor(
                     _state.value.cameraPosition.animate(
                         CameraUpdateFactory.newLatLngZoom(latLng, 15f)
                     )
-                    loadNearbyColegios(latLng.latitude, latLng.longitude, _state.value.filtroSeleccionado)
-                    // isLoading managed by loadNearbyColegios from here
+                    loadNearbyColegios(latLng.latitude, latLng.longitude)
+                    // isLoading lo gestiona loadNearbyColegios desde aquí
                 } else {
                     _state.update { it.copy(error = "Dirección no encontrada", isLoading = false) }
                 }

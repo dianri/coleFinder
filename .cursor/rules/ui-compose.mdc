@@ -1,55 +1,131 @@
 ---
-description: Arquitectura general de ColeFinder
+description: UI, filtros y colores de ColeFinder
 globs:
 alwaysApply: true
 ---
 
-# ColeFinder - Arquitectura
+# ColeFinder - UI, Compose y Filtros
 
 ## Contexto del proyecto
 - App Android nativa para docentes que geolocaliza centros educativos.
 - Estado actual: MVP avanzado.
-- Backend principal: Supabase alojado en https://api.dianrie.com.
-- Lenguaje principal: Kotlin 2.0.21.
-- Target SDK: 36.
+- Lenguaje principal: Kotlin 2.0.21. Target SDK: 36.
 
-## Reglas obligatorias
-- Usar siempre Kotlin moderno.
-- No usar XML salvo que el usuario lo pida explícitamente.
-- La UI debe implementarse con Jetpack Compose y Material 3.
+## Reglas obligatorias de UI
+- No usar XML salvo petición explícita.
+- UI con Jetpack Compose y Material 3.
 - Mantener arquitectura MVVM con flujo unidireccional de estado.
-- Toda lógica de datos debe integrarse en `MapState`.
-- El ViewModel principal es `MapViewModel`.
-- **Sin escrituras directas a Supabase desde composables:** capa de datos/ViewModel; `colegios` solo lectura salvo requisito explícito (detalle en `.cursor/rules/data-supabase.mdc`).
-- Evitar refactors grandes si no son necesarios para la tarea.
+- No mover lógica al Main Thread si puede ser costosa.
 - Hacer cambios mínimos, coherentes y compilables.
 
-## Estado y flujo
-- `MapState` gestiona:
-  - `isLoading`
-  - `colegiosConDistancia`
-  - `userLocation`
-  - `filtroSeleccionado`
-  - `cameraPositionState`
-- `MapViewModel` se encarga de:
-  - Fetch desde Supabase
-  - Geocoder con debounce de 300ms
-  - Ordenación por distancia
-  - Preparación de estado para la UI
+## Sistema de filtros
+
+### Grupos de filtros (multiselección)
+
+**Titularidad** — `Set<TitularidadFiltro>` en `MapState.filtrosTitularidad`:
+- `TODOS`, `PUBLICO`, `CONCERTADO`, `PRIVADO`
+
+**Tipo de centro** — `Set<TipoCentroFiltro>` en `MapState.filtrosTipoCentro`:
+- `TODOS`, `PRIMARIA`, `SECUNDARIA`, `FP`, `ADULTOS`, `ESPECIAL`, `OTROS`
+
+### Reglas del toggle de "Todos"
+- Si se pulsa `TODOS` → activa solo `TODOS` (limpia el resto).
+- Si `TODOS` está activo y se pulsa una opción concreta → `TODOS` se desactiva, se activa esa opción.
+- Se pueden seleccionar varias opciones concretas a la vez.
+- Si se desmarcan todas las opciones concretas → se activa `TODOS` automáticamente.
+- `TODOS` nunca coexiste con opciones concretas del mismo grupo.
+
+Lógica implementada en `CentroFiltros.kt`: `toggleTitularidad(...)` y `toggleTipoCentro(...)`.
+El ViewModel expone `toggleFiltroTitularidad(filtro)` y `toggleFiltroTipoCentro(filtro)` — **sin recarga de RPC**.
+
+### Lógica de filtrado (cliente)
+El getter `MapState.colegiosConDistancia` aplica ambos grupos:
+- Usa `titularidadNormalizada` (campo de BD) como fuente preferente; fallback a `tipo` (texto libre).
+- Usa `tipoCentroClasificado: TipoCentroClasificado` (derivado de BD + fallback cliente).
+- Un centro pasa si cumple **ambos** grupos simultáneamente.
+
+## Clasificación de tipo de centro (`CentroFiltros.kt`)
+
+### Prioridad de clasificación
+1. `tipo_centro_normalizado` de BD (campo `NearbyColegioDto.tipoCentroNormalizado`).
+2. `descripcion_entidad` — si tiene contenido significativo (no email, no vacío).
+3. Siglas al inicio del nombre: CEIP, IES, CIFP, CRA, CEPA, CEE…
+4. Si hay duda → `OTROS`.
+
+### Enum `TipoCentroClasificado`
+`PRIMARIA`, `SECUNDARIA`, `FP`, `ADULTOS`, `ESPECIAL`, `OTROS`
+
+### Función principal
+```kotlin
+fun clasificarTipoCentro(
+    nombre: String,
+    tipo: String,
+    descripcionEntidad: String?,
+    tipoCentroNormalizado: String? = null   // preferente si viene de BD
+): TipoCentroClasificado
+```
+
+## Colores — fuente única de verdad (`CentroFiltros.kt`)
+
+Todos los colores de marcadores, badges y chips se resuelven desde las constantes definidas en `CentroFiltros.kt`. **No hardcodear colores en composables.**
+
+| Concepto | Constante | Color |
+|---|---|---|
+| Público | `ColorPublico` | Verde `#4CAF50` |
+| Concertado | `ColorConcertado` | Azul `#2196F3` |
+| Privado | `ColorPrivado` | Naranja oscuro `#E65100` |
+| Primaria | `ColorChipPrimaria` | Ámbar `#F57F17` |
+| Secundaria | `ColorChipSecundaria` | Granate `#C62828` |
+| FP | `ColorChipFP` | Teal `#00897B` |
+| Adultos | `ColorChipAdultos` | Púrpura `#6A1B9A` |
+| Especial | `ColorChipEspecial` | Naranja quemado `#BF360C` |
+| Otros | `ColorChipOtros` | Gris `#757575` |
+| Todos (neutro) | `ColorFiltroTodos` | Blue-grey `#546E7A` |
+
+### Funciones de color
+```kotlin
+// Para marcadores y badges — usa titularidadNormalizada de BD con fallback a tipo libre
+fun colorParaTitularidad(tipo: String, titularidadNormalizada: String? = null): Color
+
+// Para chips de filtro
+fun colorParaTitularidadFiltro(filtro: TitularidadFiltro): Color
+fun colorParaTipoCentroFiltro(filtro: TipoCentroFiltro): Color
+```
+
+## Componentes Compose clave
+
+### `BottomSheetContent`
+```kotlin
+@Composable
+fun BottomSheetContent(
+    state: MapState,
+    onFiltroTitularidadChange: (TitularidadFiltro) -> Unit,
+    onFiltroTipoCentroChange: (TipoCentroFiltro) -> Unit,
+    onColegioClick: (Colegio) -> Unit
+)
+```
+Contiene dos `FiltroChipRow` (titularidad y tipo) y un `LazyColumn` de resultados.
+
+### `FiltroChipRow<T>` (privado en `MapScreen.kt`)
+```kotlin
+@Composable
+private fun <T> FiltroChipRow(
+    titulo: String,
+    opciones: List<T>,
+    seleccionados: Set<T>,         // multiselección
+    etiqueta: (T) -> String,
+    colorChip: (T) -> Color,
+    onSeleccionar: (T) -> Unit
+)
+```
+
+### Marcadores en el mapa
+- Color resuelto con `colorParaTitularidad(colegio.tipo, colegioConDist.titularidadNormalizada)`.
+- Numerados con `createNumberedMarkerBitmap(context, numberLabel, markerColor)`.
+- Usan `key(colegio.id)` para composición estable.
 
 ## Reglas de calidad
-- No inventar clases, funciones ni nombres de propiedades si no existen en el proyecto.
-- Antes de proponer cambios grandes, resumir qué archivos se tocarán.
+- No inventar clases, funciones ni propiedades que no existan en el proyecto.
+- Antes de proponer cambios grandes, resumir los archivos afectados.
 - Priorizar cambios pequeños antes que reescrituras completas.
-- Si falta contexto, pedir aclaración antes de modificar arquitectura.
-- No mover lógica al Main Thread si puede ser costosa.
-- Mantener compatibilidad con Hilt, Compose y Supabase SDK.
-
-## Deduplicación obligatoria
-- Antes de actualizar el estado con listas de colegios, aplicar siempre:
-  - `.distinctBy { it.id }`
-
-## Estilo de trabajo
-- Explica brevemente el plan antes de editar.
-- Después de editar, indica cómo verificar el cambio en Android Studio.
-- Si un cambio afecta a arquitectura, justificarlo en pocas líneas.
+- Si falta contexto, pedir aclaración antes de modificar la arquitectura.

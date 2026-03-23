@@ -14,9 +14,12 @@ data class NearbyColegioDto(
     val localidad: String? = null,
     val provincia: String? = null,
     val fuente: String? = null,
-    @SerialName("fuente_id")        val fuenteId: Long? = null,
+    @SerialName("fuente_id")           val fuenteId: Long? = null,
     val telefono: String? = null,
-    @SerialName("distancia_metros") val distanciaMetros: Double
+    @SerialName("descripcion_entidad")     val descripcionEntidad: String? = null,
+    @SerialName("tipo_centro_normalizado") val tipoCentroNormalizado: String? = null,
+    @SerialName("titularidad_normalizada") val titularidadNormalizada: String? = null,
+    @SerialName("distancia_metros")        val distanciaMetros: Double
 ) {
     fun toColegio() = Colegio(
         id        = id,
