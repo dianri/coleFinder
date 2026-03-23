@@ -12,14 +12,20 @@ data class MapState(
     val error: String? = null,
     val userLocation: LatLng? = null,
     val puntoReferencia: LatLng? = null,
-    val selectedColegio: Colegio? = null,
+    // Selección completa para que la card de detalle tenga distancia, tipo y titularidad normalizada.
+    val selectedColegioConDistancia: ColegioConDistancia? = null,
     // Sets vacíos no son válidos: siempre contienen al menos TODOS u opciones concretas.
     val filtrosTitularidad: Set<TitularidadFiltro> = setOf(TitularidadFiltro.TODOS),
     val filtrosTipoCentro: Set<TipoCentroFiltro> = setOf(TipoCentroFiltro.TODOS),
+    // Favoritos en memoria (persistencia con Room es roadmap).
+    val favoritosIds: Set<Int> = emptySet(),
     val cameraPosition: CameraPositionState = CameraPositionState(
         position = CameraPosition.fromLatLngZoom(LatLng(40.4168, -3.7038), 6f)
     )
 ) {
+    /** Acceso directo al Colegio seleccionado para compatibilidad interna. */
+    val selectedColegio: Colegio? get() = selectedColegioConDistancia?.colegio
+
     /**
      * Lista final para marcadores y panel lateral.
      * Usa titularidadNormalizada (BD) cuando está disponible; fallback a tipo (texto libre).

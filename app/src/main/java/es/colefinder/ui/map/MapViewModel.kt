@@ -154,21 +154,34 @@ class MapViewModel @Inject constructor(
     }
 
     fun onMapLongClick(latLng: LatLng) {
-        _state.update { it.copy(puntoReferencia = latLng, selectedColegio = null) }
+        _state.update { it.copy(puntoReferencia = latLng, selectedColegioConDistancia = null) }
         loadNearbyColegios(latLng.latitude, latLng.longitude)
     }
 
-    fun onColegioClick(colegio: Colegio) {
-        _state.update { it.copy(selectedColegio = colegio) }
+    fun onColegioClick(colegioConDistancia: ColegioConDistancia) {
+        _state.update { it.copy(selectedColegioConDistancia = colegioConDistancia) }
         viewModelScope.launch {
             _state.value.cameraPosition.animate(
-                CameraUpdateFactory.newLatLngZoom(LatLng(colegio.latitud, colegio.longitud), 17f)
+                CameraUpdateFactory.newLatLngZoom(
+                    LatLng(colegioConDistancia.colegio.latitud, colegioConDistancia.colegio.longitud), 17f
+                )
             )
         }
     }
 
     fun clearSelectedColegio() {
-        _state.update { it.copy(selectedColegio = null) }
+        _state.update { it.copy(selectedColegioConDistancia = null) }
+    }
+
+    fun toggleFavorito(colegioId: Int) {
+        _state.update { state ->
+            val nuevos = if (colegioId in state.favoritosIds) {
+                state.favoritosIds - colegioId
+            } else {
+                state.favoritosIds + colegioId
+            }
+            state.copy(favoritosIds = nuevos)
+        }
     }
 
     /** Alterna una opción de titularidad respetando la lógica de "Todos". Sin recarga RPC. */
@@ -214,8 +227,8 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    fun moverAColegio(latLng: LatLng, colegio: Colegio) {
-        _state.update { it.copy(selectedColegio = colegio) }
+    fun moverAColegio(latLng: LatLng, colegioConDistancia: ColegioConDistancia) {
+        _state.update { it.copy(selectedColegioConDistancia = colegioConDistancia) }
         viewModelScope.launch {
             _state.value.cameraPosition.animate(
                 CameraUpdateFactory.newLatLngZoom(latLng, 17f)

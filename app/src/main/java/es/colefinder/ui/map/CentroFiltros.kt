@@ -33,6 +33,16 @@ enum class TipoCentroFiltro(val label: String) {
 
 enum class TipoCentroClasificado { PRIMARIA, SECUNDARIA, FP, ADULTOS, ESPECIAL, OTROS }
 
+/** Etiqueta legible para mostrar en la card de detalle. */
+val TipoCentroClasificado.label: String get() = when (this) {
+    TipoCentroClasificado.PRIMARIA   -> "Primaria"
+    TipoCentroClasificado.SECUNDARIA -> "Secundaria"
+    TipoCentroClasificado.FP         -> "FP"
+    TipoCentroClasificado.ADULTOS    -> "Adultos"
+    TipoCentroClasificado.ESPECIAL   -> "Especial"
+    TipoCentroClasificado.OTROS      -> "Otros"
+}
+
 /**
  * Convierte el valor normalizado de BD (tipo_centro_normalizado) al enum local.
  * Si el valor es nulo o desconocido devuelve null para que el llamador aplique fallback.
@@ -224,6 +234,25 @@ fun colorParaTitularidad(tipo: String, titularidadNormalizada: String? = null): 
         else                                           -> ColorConcertado
     }
 }
+
+/** Color del chip de tipo para la card de detalle. Reutiliza colorParaTipoCentroFiltro. */
+fun colorParaTipoCentroClasificado(tipo: TipoCentroClasificado): Color = when (tipo) {
+    TipoCentroClasificado.PRIMARIA   -> ColorChipPrimaria
+    TipoCentroClasificado.SECUNDARIA -> ColorChipSecundaria
+    TipoCentroClasificado.FP         -> ColorChipFP
+    TipoCentroClasificado.ADULTOS    -> ColorChipAdultos
+    TipoCentroClasificado.ESPECIAL   -> ColorChipEspecial
+    TipoCentroClasificado.OTROS      -> ColorChipOtros
+}
+
+/** Etiqueta de titularidad legible a partir del campo normalizado de BD o del tipo libre. */
+fun labelParaTitularidad(titularidadNormalizada: String?, tipoRaw: String): String =
+    when (titularidadNormalizada?.uppercase()) {
+        "PUBLICO"    -> "Público"
+        "CONCERTADO" -> "Concertado"
+        "PRIVADO"    -> "Privado"
+        else         -> tipoRaw.ifBlank { "Desconocido" }
+    }
 
 fun colorParaTitularidadFiltro(filtro: TitularidadFiltro): Color = when (filtro) {
     TitularidadFiltro.TODOS      -> ColorFiltroTodos

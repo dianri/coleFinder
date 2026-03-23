@@ -29,13 +29,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -222,7 +228,7 @@ fun MapScreen(
                             snippet = colegio.tipo,
                             icon = icon,
                             onClick = {
-                                viewModel.onColegioClick(colegio)
+                                viewModel.onColegioClick(colegioConDist)
                                 true
                             }
                         )
@@ -285,12 +291,13 @@ fun MapScreen(
 
                     // Sugerencias de colegios si el Geocoder está vacío o como complemento
                     if (searchQuery.isNotEmpty()) {
-                        val filteredColegios = state.colegiosCercanos.map { it.colegio }.filter {
-                            it.nombre.contains(searchQuery, ignoreCase = true)
-                        }.take(5)
-                        
+                        val filteredColegios = state.colegiosCercanos
+                            .filter { it.colegio.nombre.contains(searchQuery, ignoreCase = true) }
+                            .take(5)
+
                         items(filteredColegios.size) { index ->
-                            val colegio = filteredColegios[index]
+                            val item = filteredColegios[index]
+                            val colegio = item.colegio
                             ListItem(
                                 headlineContent = { Text(colegio.nombre) },
                                 supportingContent = { Text(colegio.localidad) },
@@ -298,7 +305,7 @@ fun MapScreen(
                                 modifier = Modifier.clickable {
                                     searchQuery = colegio.nombre
                                     searchActive = false
-                                    viewModel.moverAColegio(LatLng(colegio.latitud, colegio.longitud), colegio)
+                                    viewModel.moverAColegio(LatLng(colegio.latitud, colegio.longitud), item)
                                 }
                             )
                         }
@@ -308,7 +315,7 @@ fun MapScreen(
 
             // Card de Detalle
             AnimatedVisibility(
-                visible = state.selectedColegio != null,
+                visible = state.selectedColegioConDistancia != null,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
                 modifier = Modifier
@@ -316,10 +323,13 @@ fun MapScreen(
                     .padding(16.dp)
                     .padding(bottom = 160.dp)
             ) {
-                state.selectedColegio?.let { colegio ->
+                state.selectedColegioConDistancia?.let { colegioConDistancia ->
+                    val colegio = colegioConDistancia.colegio
                     ColegioDetailCard(
-                        colegio = colegio,
+                        colegioConDistancia = colegioConDistancia,
+                        isFavorito = colegio.id in state.favoritosIds,
                         onClose = { viewModel.clearSelectedColegio() },
+                        onFavorito = { viewModel.toggleFavorito(colegio.id) },
                         onNavigate = {
                             val uri = Uri.parse("google.navigation:q=${colegio.latitud},${colegio.longitud}")
                             val mapIntent = Intent(Intent.ACTION_VIEW, uri)
@@ -334,8 +344,21 @@ fun MapScreen(
                             colegio.telefono?.let { tel ->
                                 val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$tel"))
                                 context.startActivity(intent)
-                            } ?: run {
-                                Toast.makeText(context, "Teléfono no disponible", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onVerDetalle = {
+                            val query = buildString {
+                                append(colegio.nombre)
+                                if (colegio.direccion.isNotBlank()) append(", ${colegio.direccion}")
+                                if (colegio.localidad.isNotBlank()) append(", ${colegio.localidad}")
+                            }
+                            val uri = Uri.parse("geo:0,0?q=${Uri.encode(query)}")
+                            val mapIntent = Intent(Intent.ACTION_VIEW, uri)
+                                .setPackage("com.google.android.apps.maps")
+                            try {
+                                context.startActivity(mapIntent)
+                            } catch (e: Exception) {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                             }
                         }
                     )
@@ -362,13 +385,14 @@ fun MapScreen(
                     state = state,
                     onFiltroTitularidadChange = { viewModel.toggleFiltroTitularidad(it) },
                     onFiltroTipoCentroChange  = { viewModel.toggleFiltroTipoCentro(it) },
-                    onColegioClick = { colegio ->
+                    onColegioClick = { colegioConDistancia ->
                         scope.launch { sheetState.hide() }.invokeOnCompletion {
-                            if (!sheetState.isVisible) {
-                                showBottomSheet = false
-                            }
+                            if (!sheetState.isVisible) showBottomSheet = false
                         }
-                        viewModel.moverAColegio(LatLng(colegio.latitud, colegio.longitud), colegio)
+                        viewModel.moverAColegio(
+                            LatLng(colegioConDistancia.colegio.latitud, colegioConDistancia.colegio.longitud),
+                            colegioConDistancia
+                        )
                     }
                 )
             }
@@ -378,68 +402,183 @@ fun MapScreen(
 
 @Composable
 fun ColegioDetailCard(
-    colegio: Colegio,
+    colegioConDistancia: ColegioConDistancia,
+    isFavorito: Boolean,
     onClose: () -> Unit,
+    onFavorito: () -> Unit,
     onNavigate: () -> Unit,
-    onCall: () -> Unit
+    onCall: () -> Unit,
+    onVerDetalle: () -> Unit
 ) {
+    val colegio = colegioConDistancia.colegio
+    val distText = if (colegioConDistancia.distanciaMetros >= 1000)
+        "%.1f km".format(colegioConDistancia.distanciaMetros / 1000)
+    else
+        "${colegioConDistancia.distanciaMetros.toInt()} m"
+
+    val titularidadColor = colorParaTitularidad(colegio.tipo, colegioConDistancia.titularidadNormalizada)
+    val titularidadLabel = labelParaTitularidad(colegioConDistancia.titularidadNormalizada, colegio.tipo)
+    val tipoCentroColor  = colorParaTipoCentroClasificado(colegioConDistancia.tipoCentroClasificado)
+    val tipoCentroLabel  = colegioConDistancia.tipoCentroClasificado.label
+    val hayTelefono      = !colegio.telefono.isNullOrBlank()
+
     Card(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = colegio.nombre,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+
+            // 1. CABECERA: nombre + favorito + cerrar
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    text = colegio.nombre,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onFavorito, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        imageVector = if (isFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorito) "Quitar de favoritos" else "Añadir a favoritos",
+                        tint = if (isFavorito) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Badge(
-                        containerColor = colorParaTitularidad(colegio.tipo),
-                        modifier = Modifier.padding(top = 4.dp)
-                    ) {
-                        Text(colegio.tipo, color = Color.White, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
-                    }
                 }
-                IconButton(onClick = onClose) {
+                IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "Cerrar")
                 }
             }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            Text(
-                text = "${colegio.direccion}, ${colegio.localidad}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Spacer(modifier = Modifier.height(20.dp))
-            
-            Row(modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = onCall,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Call, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Llamar")
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 2. CHIPS: titularidad · tipo · distancia
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                InfoChip(label = titularidadLabel, color = titularidadColor)
+                InfoChip(label = tipoCentroLabel,  color = tipoCentroColor)
+                InfoChip(label = distText,          color = ColorFiltroTodos)
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 3. DIRECCIÓN
+            Row(verticalAlignment = Alignment.Top) {
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .padding(top = 2.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Column {
+                    Text(
+                        text = colegio.direccion,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (colegio.localidad.isNotBlank()) {
+                        Text(
+                            text = colegio.localidad,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Button(
-                    onClick = onNavigate,
-                    modifier = Modifier.weight(1f)
+            }
+
+            // 4. TELÉFONO (solo si existe)
+            if (hayTelefono) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Call,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = colegio.telefono!!,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 5. BOTONES DE ACCIÓN
+            // Fila 1: acción primaria a ancho completo.
+            Button(
+                onClick = onNavigate,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Navegar")
+            }
+
+            // Fila 2: acciones secundarias. Con teléfono → dos columnas; sin teléfono → Detalle ancho completo.
+            Spacer(modifier = Modifier.height(8.dp))
+            if (hayTelefono) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.Directions, contentDescription = null)
+                    OutlinedButton(
+                        onClick = onCall,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Llamar")
+                    }
+                    OutlinedButton(
+                        onClick = onVerDetalle,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Detalle")
+                    }
+                }
+            } else {
+                OutlinedButton(
+                    onClick = onVerDetalle,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Navegar")
+                    Text("Ver detalle")
                 }
             }
         }
+    }
+}
+
+/** Chip informativo no interactivo con fondo semitransparente y texto coloreado. */
+@Composable
+private fun InfoChip(label: String, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = color.copy(alpha = 0.15f),
+        contentColor = color
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -449,7 +588,7 @@ fun BottomSheetContent(
     state: MapState,
     onFiltroTitularidadChange: (TitularidadFiltro) -> Unit,
     onFiltroTipoCentroChange: (TipoCentroFiltro) -> Unit,
-    onColegioClick: (Colegio) -> Unit
+    onColegioClick: (ColegioConDistancia) -> Unit
 ) {
     val listState = rememberLazyListState()
 
@@ -534,7 +673,7 @@ fun BottomSheetContent(
                                 )
                             }
                         },
-                        modifier = Modifier.clickable { onColegioClick(colegio) }
+                        modifier = Modifier.clickable { onColegioClick(item) }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
