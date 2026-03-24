@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import javax.inject.Inject
 
 private const val DEFAULT_LAT = 40.4168
@@ -65,24 +66,28 @@ class MapViewModel @Inject constructor(
 
     /**
      * Carga los N centros más cercanos al punto dado.
-     * Si hay una única titularidad o tipo seleccionado, lo envía al servidor via RPC.
-     * Si hay multiselección o TODOS, el servidor devuelve sin restricción y el cliente
-     * filtra como fallback en MapState.colegiosConDistancia.
+     * Envía al servidor los filtros activos como arrays (p_titularidades, p_tipos).
+     * Si el filtro es TODOS o vacío, no se incluye el parámetro (null en BD = sin restricción).
+     * El filtrado en cliente en MapState.colegiosConDistancia sigue activo como fallback de UI.
      */
     fun loadNearbyColegios(lat: Double, lon: Double) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             try {
-                val filtros = _state.value
-                val pTitularidad = singleTitularidadParam(filtros.filtrosTitularidad)
-                val pTipo = singleTipoParam(filtros.filtrosTipoCentro)
+                val estadoActual    = _state.value
+                val arrayTitularidad = estadoActual.filtrosTitularidad.toRpcArray()
+                val arrayTipo        = estadoActual.filtrosTipoCentro.toRpcArray()
 
                 val params = buildJsonObject {
                     put("p_lat", lat)
                     put("p_lon", lon)
                     put("p_limit", 50)
-                    pTitularidad?.let { put("p_titularidad", it) }
-                    pTipo?.let { put("p_tipo", it) }
+                    if (arrayTitularidad != null) putJsonArray("p_titularidades") {
+                        arrayTitularidad.forEach { add(it) }
+                    }
+                    if (arrayTipo != null) putJsonArray("p_tipos") {
+                        arrayTipo.forEach { add(it) }
+                    }
                 }
                 val dtos = supabase.postgrest
                     .rpc("nearby_colegios", params)
@@ -108,24 +113,6 @@ class MapViewModel @Inject constructor(
                 _state.update { it.copy(error = e.localizedMessage, isLoading = false) }
             }
         }
-    }
-
-    /**
-     * Devuelve el param RPC de titularidad solo si hay UNA única opción concreta activa.
-     * Si hay TODOS o más de una selección, devuelve null (sin filtro en servidor).
-     */
-    private fun singleTitularidadParam(filtros: Set<TitularidadFiltro>): String? {
-        if (TitularidadFiltro.TODOS in filtros || filtros.size != 1) return null
-        return filtros.first().toRpcParam()
-    }
-
-    /**
-     * Devuelve el param RPC de tipo de centro solo si hay UNA única opción concreta activa.
-     * Si hay TODOS o más de una selección, devuelve null (sin filtro en servidor).
-     */
-    private fun singleTipoParam(filtros: Set<TipoCentroFiltro>): String? {
-        if (TipoCentroFiltro.TODOS in filtros || filtros.size != 1) return null
-        return filtros.first().toRpcParam()
     }
 
     fun onSearchQueryChanged(query: String, context: Context) {

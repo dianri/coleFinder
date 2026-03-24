@@ -52,20 +52,40 @@ Si se añaden nuevas fuentes o se reimportan datos, aplicar los mismos UPDATEs c
 
 ## RPC: `nearby_colegios`
 
-Función SQL en Supabase que devuelve los N centros más cercanos a un punto (Haversine).
+Función SQL en Supabase que devuelve los N centros más cercanos usando índice espacial GIST (PostGIS).
 
 ```sql
 -- Firma actual
-nearby_colegios(p_lat double precision, p_lon double precision, p_limit integer DEFAULT 50)
+nearby_colegios(
+  p_lat           double precision,
+  p_lon           double precision,
+  p_limit         integer  DEFAULT 50,
+  p_titularidades text[]   DEFAULT NULL,   -- multiseleccion de titularidad
+  p_tipos         text[]   DEFAULT NULL    -- multiseleccion de tipo de centro
+)
 
 -- Campos devueltos
 id, nombre, direccion, localidad, provincia, tipo, latitud, longitud, telefono,
 descripcion_entidad, tipo_centro_normalizado, titularidad_normalizada, distancia_metros
 ```
 
-- **Sin parámetros de filtro**: la RPC no filtra por titularidad ni tipo; el filtrado lo aplica el cliente en `MapState.colegiosConDistancia`.
+- Los filtros usan `= ANY(array)` en SQL. Si el array es NULL, no se aplica restricción.
+- Orden por cercanía usando operador espacial `<->` (KNN sobre índice GIST `idx_colegios_location`).
 - La app siempre llama con `p_limit = 50`.
 - Se invoca mediante `supabase.postgrest.rpc("nearby_colegios", params).decodeList<NearbyColegioDto>()`.
+- Los arrays se construyen en Kotlin con `Set<TitularidadFiltro>.toRpcArray()` (en `CentroFiltros.kt`) y se envían con `putJsonArray("p_titularidades") { ... }`.
+- Si el set de filtros contiene `TODOS` o está vacío, el parámetro no se incluye (null en BD).
+
+### Regla crítica: No dejar versiones obsoletas de la RPC
+Si se modifica la firma, siempre ejecutar primero:
+```sql
+DROP FUNCTION IF EXISTS public.nearby_colegios(... firma anterior ...);
+```
+Y verificar después que solo existe una función:
+```sql
+SELECT proname, pg_get_function_arguments(oid) FROM pg_proc
+WHERE pronamespace = 'public'::regnamespace AND proname = 'nearby_colegios';
+```
 
 ## Modelo Kotlin
 

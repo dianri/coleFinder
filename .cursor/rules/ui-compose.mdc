@@ -36,10 +36,11 @@ alwaysApply: true
 - `TODOS` nunca coexiste con opciones concretas del mismo grupo.
 
 Lógica implementada en `CentroFiltros.kt`: `toggleTitularidad(...)` y `toggleTipoCentro(...)`.
-El ViewModel expone `toggleFiltroTitularidad(filtro)` y `toggleFiltroTipoCentro(filtro)` — **sin recarga de RPC**.
+El ViewModel expone `toggleFiltroTitularidad(filtro)` y `toggleFiltroTipoCentro(filtro)` — **recargan la RPC** vía `reloadWithCurrentFilters()`.
 
-### Lógica de filtrado (cliente)
-El getter `MapState.colegiosConDistancia` aplica ambos grupos:
+### Lógica de filtrado (servidor + fallback cliente)
+El ViewModel envía filtros a la RPC como arrays (`p_titularidades`, `p_tipos`). Si el set es TODOS o vacío, no se incluye el parámetro.
+El getter `MapState.colegiosConDistancia` aplica ambos grupos en cliente como **fallback de coherencia visual**:
 - Usa `titularidadNormalizada` (campo de BD) como fuente preferente; fallback a `tipo` (texto libre).
 - Usa `tipoCentroClasificado: TipoCentroClasificado` (derivado de BD + fallback cliente).
 - Un centro pasa si cumple **ambos** grupos simultáneamente.
@@ -124,8 +125,4 @@ private fun <T> FiltroChipRow(
 - Numerados con `createNumberedMarkerBitmap(context, numberLabel, markerColor)`.
 - Usan `key(colegio.id)` para composición estable.
 
-## Reglas de calidad
-- No inventar clases, funciones ni propiedades que no existan en el proyecto.
-- Antes de proponer cambios grandes, resumir los archivos afectados.
-- Priorizar cambios pequeños antes que reescrituras completas.
-- Si falta contexto, pedir aclaración antes de modificar la arquitectura.
+

@@ -21,8 +21,7 @@ alwaysApply: true
 - Toda lógica de datos debe integrarse en `MapState`.
 - El ViewModel principal es `MapViewModel`.
 - Sin escrituras directas a Supabase desde composables: toda escritura pasa por ViewModel; `colegios` es solo lectura (detalle en `data-supabase.mdc`).
-- Evitar refactors grandes si no son necesarios para la tarea.
-- Hacer cambios mínimos, coherentes y compilables.
+
 
 ## Estado y flujo
 
@@ -53,15 +52,16 @@ data class ColegioConDistancia(
 
 ### `MapViewModel` — responsabilidades
 - `initializeMap(userLatLng: LatLng?)`: carga inicial única (flag `initialized`); usa ubicación del usuario o Madrid por defecto.
-- `loadNearbyColegios(lat, lon)`: llama a la RPC `nearby_colegios`; sin parámetros de filtro (el filtrado es cliente).
+- `loadNearbyColegios(lat, lon)`: llama a la RPC `nearby_colegios` pasando los filtros activos como arrays (`p_titularidades`, `p_tipos`). Si el filtro es TODOS o vacío, el parámetro no se envía (null = sin restricción en BD).
 - Geocoder con debounce de 300 ms (`onSearchQueryChanged`).
-- `toggleFiltroTitularidad` / `toggleFiltroTipoCentro`: actualizan sets de filtros sin recargar la RPC.
+- `toggleFiltroTitularidad` / `toggleFiltroTipoCentro`: actualizan sets de filtros **y recargan la RPC** llamando a `reloadWithCurrentFilters()`.
 - `moverAColegio`: solo cámara + selección, nunca recarga datos.
 
-### Flujo de filtros (cliente)
-La RPC devuelve siempre los 50 centros más cercanos sin restricción de tipo ni titularidad.
-El getter `colegiosConDistancia` en `MapState` aplica ambos grupos de filtros en memoria.
-Cambiar un filtro **no** provoca una nueva llamada a Supabase.
+### Flujo de filtros (servidor + cliente)
+La RPC acepta `p_titularidades text[]` y `p_tipos text[]` (arrays opcionales).
+Cuando hay opciones concretas seleccionadas, `MapViewModel` construye el array con `Set<TitularidadFiltro>.toRpcArray()` / `Set<TipoCentroFiltro>.toRpcArray()` y lo envía como `JsonArray`.
+El getter `colegiosConDistancia` en `MapState` aplica ambos filtros en memoria como **fallback de UI** para garantizar coherencia visual.
+Cambiar un filtro **sí** provoca una nueva llamada a Supabase (vía `reloadWithCurrentFilters()`).
 
 ## Archivos clave del dominio de mapa
 
@@ -74,19 +74,10 @@ Cambiar un filtro **no** provoca una nueva llamada a Supabase.
 | `NearbyColegioDto.kt` | DTO de deserialización de la RPC |
 | `Colegio.kt` | Modelo de dominio |
 
-## Reglas de calidad
-- No inventar clases, funciones ni nombres de propiedades si no existen en el proyecto.
-- Antes de proponer cambios grandes, resumir qué archivos se tocarán.
-- Priorizar cambios pequeños antes que reescrituras completas.
-- Si falta contexto, pedir aclaración antes de modificar arquitectura.
-- No mover lógica costosa al Main Thread.
-- Mantener compatibilidad con Hilt, Compose y Supabase SDK.
+## Deduplicación obligatoria en State
 
 ## Deduplicación obligatoria
 - Antes de actualizar el estado con listas de colegios, aplicar siempre:
   - `.distinctBy { it.id }`
 
-## Estilo de trabajo
-- Explica brevemente el plan antes de editar.
-- Después de editar, indica cómo verificar el cambio en Android Studio.
-- Si un cambio afecta a arquitectura, justificarlo en pocas líneas.
+

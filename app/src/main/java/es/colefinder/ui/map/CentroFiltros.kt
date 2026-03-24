@@ -1,6 +1,9 @@
 package es.colefinder.ui.map
 
 import androidx.compose.ui.graphics.Color
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
 
 // ── Titularidad ───────────────────────────────────────────────────────────────
 
@@ -13,7 +16,7 @@ enum class TitularidadFiltro(val label: String) {
     /**
      * Valor para el parámetro p_titularidad de la RPC.
      * Debe coincidir exactamente con titularidad_normalizada en BD: PUBLICO, CONCERTADO, PRIVADO.
-     * Devuelve null cuando no hay restricción (TODOS).
+     * Devuelve null when no hay restricción (TODOS).
      */
     fun toRpcParam(): String? = when (this) {
         TODOS      -> null
@@ -37,7 +40,7 @@ enum class TipoCentroFiltro(val label: String) {
     /**
      * Valor para el parámetro p_tipo de la RPC.
      * Debe coincidir exactamente con tipo_centro_normalizado en BD.
-     * Devuelve null cuando no hay restricción (TODOS).
+     * Devuelve null when no hay restricción (TODOS).
      */
     fun toRpcParam(): String? = when (this) {
         TODOS      -> null
@@ -198,6 +201,30 @@ fun matchesTitularidadNormalizadaFiltros(
 }
 
 // ── Lógica de toggle para multiselección ─────────────────────────────────────
+
+/**
+ * Genera el array JSON para el parámetro p_titularidades de la RPC.
+ * Si el set contiene TODOS o está vacío, devuelve null (sin restricción en BD).
+ * Si tiene opciones concretas, devuelve un JsonArray con sus valores normalizados.
+ */
+@JvmName("titularidadToRpcArray")
+fun Set<TitularidadFiltro>.toRpcArray(): JsonArray? {
+    val concretos = this.filter { it != TitularidadFiltro.TODOS }
+    if (concretos.isEmpty()) return null
+    return buildJsonArray { concretos.forEach { add(it.toRpcParam()!!) } }
+}
+
+/**
+ * Genera el array JSON para el parámetro p_tipos de la RPC.
+ * Si el set contiene TODOS o está vacío, devuelve null (sin restricción en BD).
+ * Si tiene opciones concretas, devuelve un JsonArray con sus valores normalizados.
+ */
+@JvmName("tipoCentroToRpcArray")
+fun Set<TipoCentroFiltro>.toRpcArray(): JsonArray? {
+    val concretos = this.filter { it != TipoCentroFiltro.TODOS }
+    if (concretos.isEmpty()) return null
+    return buildJsonArray { concretos.forEach { add(it.toRpcParam()!!) } }
+}
 
 /**
  * Reglas de toggle:
