@@ -17,6 +17,8 @@ alwaysApply: true
 - Mantener arquitectura MVVM con flujo unidireccional de estado.
 - No mover lógica al Main Thread si puede ser costosa.
 - Hacer cambios mínimos, coherentes y compilables.
+- **Jerarquía Visual**: Usar `zIndex` para overlays (Detail Card > FAB/Sheet > Mapa).
+- **Layout dinámico**: Medir componentes con `onSizeChanged` para calcular áncoras o márgenes dinámicos si es necesario.
 
 ## Sistema de filtros
 
@@ -105,7 +107,20 @@ fun BottomSheetContent(
     onColegioClick: (Colegio) -> Unit
 )
 ```
-Contiene dos `FiltroChipRow` (titularidad y tipo) y un `LazyColumn` de resultados.
+### `MapSheet` (Bottom Sheet Custom)
+- Usa `AnchoredDraggableState` en lugar de `BottomSheetScaffold` para control total.
+- Áncoras: `Collapsed` (solo header), `Intermediate` (header + filtros), `Expanded` (lista completa).
+- El estado `Expanded` debe respetar la altura de la `SearchBar` dinámicamente.
+- Implementar `NestedScrollConnection` para scroll fluido entre sheet y listas internas.
+
+### `FloatingActionButton` (Ubicación)
+- Mantener siempre visible (pero con `zIndex` inferior a la tarjeta de detalle).
+- Plugin de permisos con "acción pendiente": si se pulsa sin permiso, pedirlo y ejecutar la acción automáticamente al concederlo.
+- Fallback de ubicación: `lastLocation` -> `getCurrentLocation` (alta precisión) -> Toast de error.
+
+### `Detail Card` y Overlays
+- `ColegioDetailCard` debe aparecer desde abajo (`slideInVertically`).
+- Debe tener `zIndex` superior para cubrir el FAB y el sheet colapsado.
 
 ### `FiltroChipRow<T>` (privado en `MapScreen.kt`)
 ```kotlin

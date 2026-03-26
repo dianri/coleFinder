@@ -136,8 +136,10 @@ data class NearbyColegioDto(
 - No duplicar lógica de acceso a Supabase en la UI.
 - Centralizar acceso a datos en ViewModel + cliente inyectado.
 
-## Persistencia futura
-- El roadmap contempla Room para favoritos y modo offline.
+## Persistencia Local y Preferencias
+
+- **DataStore Preferences**: Usado para estados de descubrimiento y preferencias de UI que deben persistir entre sesiones (ej: `hasDiscoveredLongPress`).
+- **Room (Futuro)**: El roadmap contempla Room para favoritos y modo offline.
 - También contempla sincronización selectiva Room + Supabase.
 - Si una tarea toca persistencia, respetar esta dirección arquitectónica.
 - No introducir otra base de datos local diferente sin que se solicite explícitamente.

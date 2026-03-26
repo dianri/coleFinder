@@ -35,9 +35,11 @@ data class MapState(
     val userLocation: LatLng?,
     val puntoReferencia: LatLng?,
     val selectedColegio: Colegio?,
-    val filtrosTitularidad: Set<TitularidadFiltro>,    // multiselección; nunca vacío
-    val filtrosTipoCentro: Set<TipoCentroFiltro>,      // multiselección; nunca vacío
-    val cameraPosition: CameraPositionState
+    val selectedColegioConDistancia: ColegioConDistancia?, // Selección detallada
+    val filtrosTitularidad: Set<TitularidadFiltro>,
+    val filtrosTipoCentro: Set<TipoCentroFiltro>,
+    val cameraPosition: CameraPositionState,
+    val showLongPressHint: Boolean = false                 // Hint de descubrimiento
 ) {
     val colegiosConDistancia: List<ColegioConDistancia>  // getter: aplica ambos filtros en cliente
 }
@@ -55,6 +57,9 @@ data class ColegioConDistancia(
 - `loadNearbyColegios(lat, lon)`: llama a la RPC `nearby_colegios` pasando los filtros activos como arrays (`p_titularidades`, `p_tipos`). Si el filtro es TODOS o vacío, el parámetro no se envía (null = sin restricción en BD).
 - Geocoder con debounce de 300 ms (`onSearchQueryChanged`).
 - `toggleFiltroTitularidad` / `toggleFiltroTipoCentro`: actualizan sets de filtros **y recargan la RPC** llamando a `reloadWithCurrentFilters()`.
+- `onMapClick` / `onMapMoved`: disparan el hint de descubrimiento si aplica.
+- `onMapLongClick`: realiza búsqueda en punto y marca descubrimiento.
+- `focusOnCurrentLocationAndLoadNearby`: flujo unificado de permisos + centrado + carga (maneja fallbacks y acciones pendientes).
 - `moverAColegio`: solo cámara + selección, nunca recarga datos.
 
 ### Flujo de filtros (servidor + cliente)
