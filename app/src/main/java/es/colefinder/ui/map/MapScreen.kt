@@ -166,7 +166,7 @@ fun MapScreen(
 
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
-        sheetPeekHeight = 190.dp,
+        sheetPeekHeight = 200.dp,
         sheetContent = {
             BottomSheetContent(
                 state = state,
@@ -617,7 +617,7 @@ fun BottomSheetContent(
         Text(
             text = "Centros cercanos",
             style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 16.dp).padding(top = 0.dp, bottom = 2.dp)
         )
 
         FiltroChipRow(
@@ -629,7 +629,7 @@ fun BottomSheetContent(
             onSeleccionar = onFiltroTitularidadChange
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
 
         FiltroChipRow(
             titulo = "Tipo de centro",
@@ -640,7 +640,7 @@ fun BottomSheetContent(
             onSeleccionar = onFiltroTipoCentroChange
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
 
         if (state.colegiosConDistancia.isEmpty()) {
             Box(
@@ -714,7 +714,7 @@ private fun <T> FiltroChipRow(
             text = titulo,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
+            modifier = Modifier.padding(bottom = 0.dp)
         )
         Row(
             modifier = Modifier
