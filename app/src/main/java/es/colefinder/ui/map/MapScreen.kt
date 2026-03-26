@@ -56,12 +56,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -102,11 +107,15 @@ fun MapScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     
+    val scaffoldState = rememberBottomSheetScaffoldState(
+        bottomSheetState = rememberStandardBottomSheetState(
+            initialValue = SheetValue.PartiallyExpanded,
+            skipHiddenState = true
+        )
+    )
+    
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
-    
-    val sheetState = rememberModalBottomSheetState()
-    var showBottomSheet by remember { mutableStateOf(false) }
 
     val locationPermissionsState = rememberMultiplePermissionsState(
         permissions = listOf(
@@ -155,33 +164,30 @@ fun MapScreen(
         }
     }
 
-    Scaffold(
-        floatingActionButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                FloatingActionButton(
-                    onClick = {
-                        if (locationPermissionsState.allPermissionsGranted) {
-                            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                                location?.let {
-                                    viewModel.updateUserLocation(LatLng(it.latitude, it.longitude))
-                                } ?: run {
-                                    Toast.makeText(context, "No se pudo obtener la ubicación. Activa el GPS.", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        } else {
-                            locationPermissionsState.launchMultiplePermissionRequest()
-                        }
-                    },
-                    modifier = Modifier.padding(bottom = 16.dp)
-                ) {
-                    Icon(Icons.Default.LocationOn, contentDescription = "Mi ubicación")
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
+        sheetPeekHeight = 160.dp,
+        sheetContent = {
+            BottomSheetContent(
+                state = state,
+                onFiltroTitularidadChange = { viewModel.toggleFiltroTitularidad(it) },
+                onFiltroTipoCentroChange  = { viewModel.toggleFiltroTipoCentro(it) },
+                onColegioClick = { colegioConDistancia ->
+                    scope.launch { scaffoldState.bottomSheetState.partialExpand() }
+                    viewModel.moverAColegio(
+                        LatLng(colegioConDistancia.colegio.latitud, colegioConDistancia.colegio.longitud),
+                        colegioConDistancia
+                    )
                 }
-                
-                FloatingActionButton(
-                    onClick = { showBottomSheet = true }
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Ver lista")
-                }
+            )
+        },
+        sheetDragHandle = {
+            Surface(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(50)
+            ) {
+                Box(modifier = Modifier.size(width = 32.dp, height = 4.dp))
             }
         }
     ) { padding ->
@@ -375,27 +381,37 @@ fun MapScreen(
             state.error?.let {
                 Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             }
-        }
 
-        if (showBottomSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showBottomSheet = false },
-                sheetState = sheetState
-            ) {
-                BottomSheetContent(
-                    state = state,
-                    onFiltroTitularidadChange = { viewModel.toggleFiltroTitularidad(it) },
-                    onFiltroTipoCentroChange  = { viewModel.toggleFiltroTipoCentro(it) },
-                    onColegioClick = { colegioConDistancia ->
-                        scope.launch { sheetState.hide() }.invokeOnCompletion {
-                            if (!sheetState.isVisible) showBottomSheet = false
+            // Botón de Ubicación anclado manualmente al tope del BottomSheet
+            val density = LocalDensity.current
+            val fabOffset by remember {
+                derivedStateOf {
+                    runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrNull() ?: 0f
+                }
+            }
+
+            FloatingActionButton(
+                onClick = {
+                    if (locationPermissionsState.allPermissionsGranted) {
+                        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                            location?.let {
+                                viewModel.updateUserLocation(LatLng(it.latitude, it.longitude))
+                            } ?: run {
+                                Toast.makeText(context, "No se pudo obtener la ubicación. Activa el GPS.", Toast.LENGTH_SHORT).show()
+                            }
                         }
-                        viewModel.moverAColegio(
-                            LatLng(colegioConDistancia.colegio.latitud, colegioConDistancia.colegio.longitud),
-                            colegioConDistancia
-                        )
+                    } else {
+                        locationPermissionsState.launchMultiplePermissionRequest()
                     }
-                )
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 16.dp)
+                    .graphicsLayer {
+                        translationY = fabOffset - with(density) { 80.dp.toPx() } // Posición relativa al tope del sheet
+                    }
+            ) {
+                Icon(Icons.Default.LocationOn, contentDescription = "Mi ubicación")
             }
         }
     }
