@@ -123,7 +123,8 @@ fun MapScreen(
         MapUiSettings(
             myLocationButtonEnabled = false,
             compassEnabled = true,
-            mapToolbarEnabled = false
+            mapToolbarEnabled = false,
+            zoomControlsEnabled = false
         )
     }
 
