@@ -21,7 +21,10 @@ data class MapState(
     val favoritosIds: Set<Int> = emptySet(),
     val cameraPosition: CameraPositionState = CameraPositionState(
         position = CameraPosition.fromLatLngZoom(LatLng(40.4168, -3.7038), 6f)
-    )
+    ),
+    val showLongPressHint: Boolean = false,
+    val hasDiscoveredLongPress: Boolean = false,
+    val longPressHintCount: Int = 0
 ) {
     /** Acceso directo al Colegio seleccionado para compatibilidad interna. */
     val selectedColegio: Colegio? get() = selectedColegioConDistancia?.colegio

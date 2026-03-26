@@ -57,6 +57,8 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.platform.LocalDensity
@@ -104,6 +106,7 @@ import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.CameraMoveStartedReason
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
@@ -111,6 +114,7 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import es.colefinder.data.model.Colegio
 import es.colefinder.ui.utils.createNumberedMarkerBitmap
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -143,6 +147,7 @@ fun MapScreen(
     }
 
     val navBarPx = WindowInsets.navigationBars.getBottom(density).toFloat()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Custom NestedScrollConnection para delegar a AnchoredDraggable manual si nestedScrollConnection falla
     val customNestedScrollConnection = remember(anchoredDraggableState) {
@@ -236,6 +241,23 @@ fun MapScreen(
         }
     }
 
+    // Efecto para mostrar el hint via Snackbar
+    LaunchedEffect(state.showLongPressHint) {
+        if (state.showLongPressHint) {
+            snackbarHostState.showSnackbar(
+                message = "Mantén pulsado el mapa para buscar centros cerca de ese punto"
+            )
+            viewModel.onHintDismissed()
+        }
+    }
+
+    // Efecto para activar el hint al arrastrar el mapa
+    LaunchedEffect(state.cameraPosition.isMoving) {
+        if (state.cameraPosition.isMoving) {
+            viewModel.onMapMoved()
+        }
+    }
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize().onSizeChanged { containerHeight = it.height.toFloat() }) {
         val fullHeight = constraints.maxHeight.toFloat()
         
@@ -244,7 +266,7 @@ fun MapScreen(
             modifier = Modifier.fillMaxSize(),
             cameraPositionState = state.cameraPosition,
             onMapLongClick = { viewModel.onMapLongClick(it) },
-            onMapClick = { viewModel.clearSelectedColegio() },
+            onMapClick = { viewModel.onMapClick() },
             properties = MapProperties(isMyLocationEnabled = locationPermissionsState.allPermissionsGranted),
             uiSettings = uiSettings
         ) {
@@ -513,6 +535,12 @@ fun MapScreen(
         ) {
             Icon(Icons.Default.LocationOn, contentDescription = "Mi ubicación")
         }
+
+        // Host para el hint contextual
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp) // Encima del sheet colapsado
+        )
     }
 }
 

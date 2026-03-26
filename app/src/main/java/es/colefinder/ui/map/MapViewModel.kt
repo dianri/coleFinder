@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import es.colefinder.data.repository.UserPreferencesRepository
 import javax.inject.Inject
 
 private const val DEFAULT_LAT = 40.4168
@@ -32,7 +33,8 @@ private const val TAG = "MapViewModel"
 
 @HiltViewModel
 class MapViewModel @Inject constructor(
-    private val supabase: SupabaseClient
+    private val supabase: SupabaseClient,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MapState())
@@ -40,6 +42,17 @@ class MapViewModel @Inject constructor(
 
     private var searchJob: Job? = null
     private var initialized = false
+
+    init {
+        viewModelScope.launch {
+            userPreferencesRepository.userPreferencesFlow.collect { prefs ->
+                _state.update { it.copy(
+                    hasDiscoveredLongPress = prefs.hasDiscoveredLongPress,
+                    longPressHintCount = prefs.longPressHintCount
+                )}
+            }
+        }
+    }
 
     fun initializeMap(userLatLng: LatLng?) {
         if (initialized) {
@@ -168,6 +181,40 @@ class MapViewModel @Inject constructor(
     fun onMapLongClick(latLng: LatLng) {
         _state.update { it.copy(puntoReferencia = latLng, selectedColegioConDistancia = null) }
         loadNearbyColegios(latLng.latitude, latLng.longitude)
+        
+        // Marcar como descubierto si no lo estaba
+        if (!_state.value.hasDiscoveredLongPress) {
+            viewModelScope.launch {
+                userPreferencesRepository.updateHasDiscoveredLongPress(true)
+            }
+        }
+    }
+
+    fun onMapClick() {
+        clearSelectedColegio()
+        val currentState = _state.value
+        // Mostrar hint ilimitadamente hasta que se descubra
+        if (!currentState.hasDiscoveredLongPress) {
+            _state.update { it.copy(showLongPressHint = true) }
+            viewModelScope.launch {
+                userPreferencesRepository.incrementHintCount()
+            }
+        }
+    }
+
+    fun onMapMoved() {
+        val currentState = _state.value
+        // Al arrastrar el mapa, si no se ha descubierto el long press, mostramos el hint
+        if (!currentState.hasDiscoveredLongPress && !currentState.showLongPressHint) {
+            _state.update { it.copy(showLongPressHint = true) }
+            viewModelScope.launch {
+                userPreferencesRepository.incrementHintCount()
+            }
+        }
+    }
+
+    fun onHintDismissed() {
+        _state.update { it.copy(showLongPressHint = false) }
     }
 
     fun onColegioClick(colegioConDistancia: ColegioConDistancia) {
