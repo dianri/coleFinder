@@ -2,6 +2,7 @@ package es.colefinder.ui.map
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.location.Location
 import android.util.Log
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -96,6 +97,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -104,6 +106,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import androidx.core.app.ActivityCompat
+import android.content.pm.PackageManager
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.CameraMoveStartedReason
@@ -131,7 +136,64 @@ fun MapScreen(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
-    // 1. Estados del BottomSheet Custom con AnchoredDraggable
+    // 1. Estados de Ubicación y Permisos (Arriba para que estén disponibles)
+    val locationPermissionsState = rememberMultiplePermissionsState(
+        permissions = listOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+    )
+
+    val fusedLocationClient = remember {
+        LocationServices.getFusedLocationProviderClient(context)
+    }
+
+    val uiSettings = remember {
+        MapUiSettings(
+            myLocationButtonEnabled = false,
+            compassEnabled = true,
+            mapToolbarEnabled = false,
+            zoomControlsEnabled = false
+        )
+    }
+
+    var isFirstLoad by remember { mutableStateOf(true) }
+    var pendingLocationRequest by remember { mutableStateOf(false) }
+
+    val focusOnCurrentLocationAndLoadNearby = remember(fusedLocationClient, viewModel, context) {
+        {
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                
+                fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc: Location? ->
+                    if (lastLoc != null) {
+                        viewModel.updateUserLocation(LatLng(lastLoc.latitude, lastLoc.longitude))
+                    } else {
+                        // Fallback: getCurrentLocation para casos donde lastLocation es null
+                        try {
+                            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                                .addOnSuccessListener { freshLoc: Location? ->
+                                    if (freshLoc != null) {
+                                        viewModel.updateUserLocation(LatLng(freshLoc.latitude, freshLoc.longitude))
+                                    } else {
+                                        Toast.makeText(context, "No se pudo obtener la ubicación. Activa el GPS.", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                .addOnFailureListener {
+                                    Toast.makeText(context, "Error al obtener ubicación fresh", Toast.LENGTH_SHORT).show()
+                                }
+                        } catch (e: SecurityException) {
+                            Toast.makeText(context, "Permiso revocado inesperadamente", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }.addOnFailureListener {
+                    Toast.makeText(context, "Error al acceder a la última ubicación", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // 2. Estados del BottomSheet Custom con AnchoredDraggable
     var headerHeight by remember { mutableStateOf(0f) }
     var filtersHeight by remember { mutableStateOf(0f) }
     var containerHeight by remember { mutableStateOf(0f) }
@@ -187,13 +249,17 @@ fun MapScreen(
         }
     }
 
+    var searchQuery by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
+    var searchBarHeight by remember { mutableStateOf(0f) }
+
     SideEffect {
         if (containerHeight > 0 && headerHeight > 0) {
             // hCollapsed: el tope del sheet queda a (altura total - el cabezal visible por encima de la nav bar)
             // Ya que aplicamos navigationBarsPadding() abajo, el headerHeight medido NO incluye la barra de navegación.
             val hCollapsed = containerHeight - headerHeight - navBarPx
             val hIntermediate = containerHeight - (headerHeight + filtersHeight) - navBarPx
-            val hExpanded = with(density) { 80.dp.toPx() } // Espacio para la SearchBar
+            val hExpanded = searchBarHeight + with(density) { 24.dp.toPx() } // Debajo de la SearchBar + margen 24dp
 
             anchoredDraggableState.updateAnchors(
                 DraggableAnchors {
@@ -205,39 +271,24 @@ fun MapScreen(
         }
     }
     
-    var searchQuery by remember { mutableStateOf("") }
-    var searchActive by remember { mutableStateOf(false) }
 
-    val locationPermissionsState = rememberMultiplePermissionsState(
-        permissions = listOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
-    )
 
-    val fusedLocationClient = remember {
-        LocationServices.getFusedLocationProviderClient(context)
-    }
 
-    val uiSettings = remember {
-        MapUiSettings(
-            myLocationButtonEnabled = false,
-            compassEnabled = true,
-            mapToolbarEnabled = false,
-            zoomControlsEnabled = false
-        )
-    }
-
-    LaunchedEffect(Unit) {
+    // Manejo de permisos y carga inicial / acciones pendientes
+    LaunchedEffect(locationPermissionsState.allPermissionsGranted) {
         if (locationPermissionsState.allPermissionsGranted) {
-            try {
-                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                    val latLng = location?.let { LatLng(it.latitude, it.longitude) }
-                    viewModel.initializeMap(latLng)
-                }.addOnFailureListener { viewModel.initializeMap(null) }
-            } catch (e: Exception) { viewModel.initializeMap(null) }
+            // Si el permiso se acaba de conceder O es la primera carga con permiso ya presente
+            if (isFirstLoad || pendingLocationRequest) {
+                focusOnCurrentLocationAndLoadNearby()
+                isFirstLoad = false
+                pendingLocationRequest = false
+            }
         } else {
-            viewModel.initializeMap(null)
+            // Si no hay permisos, inicializamos el mapa en la posición por defecto solo al arrancar
+            if (isFirstLoad && !locationPermissionsState.shouldShowRationale) {
+                viewModel.initializeMap(null)
+                isFirstLoad = false
+            }
         }
     }
 
@@ -308,7 +359,8 @@ fun MapScreen(
                     IntOffset(0, y.roundToInt())
                 }
                 .anchoredDraggable(anchoredDraggableState, Orientation.Vertical)
-                .nestedScroll(customNestedScrollConnection),
+                .nestedScroll(customNestedScrollConnection)
+                .zIndex(1f),
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             shadowElevation = 16.dp, // Elevación para sombra visual
             color = MaterialTheme.colorScheme.surface
@@ -451,6 +503,7 @@ fun MapScreen(
                 .align(Alignment.TopCenter)
                 .padding(if (searchActive) 0.dp else 16.dp)
                 .fillMaxWidth()
+                .onSizeChanged { searchBarHeight = it.height.toFloat() }
         ) {
             LazyColumn {
                 items(state.suggestions.size) { index ->
@@ -478,6 +531,7 @@ fun MapScreen(
                 .align(Alignment.BottomCenter)
                 .padding(16.dp)
                 .padding(bottom = 80.dp) // No obstruir el estado colapsado
+                .zIndex(2f)
         ) {
             state.selectedColegioConDistancia?.let { colegioConDistancia ->
                 val colegio = colegioConDistancia.colegio
@@ -517,11 +571,10 @@ fun MapScreen(
         }
         FloatingActionButton(
             onClick = {
+                pendingLocationRequest = true
                 if (locationPermissionsState.allPermissionsGranted) {
-                    fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
-                        loc?.let { viewModel.updateUserLocation(LatLng(it.latitude, it.longitude)) }
-                        ?: Toast.makeText(context, "Activa el GPS", Toast.LENGTH_SHORT).show()
-                    }
+                    focusOnCurrentLocationAndLoadNearby()
+                    pendingLocationRequest = false
                 } else {
                     locationPermissionsState.launchMultiplePermissionRequest()
                 }
@@ -529,9 +582,12 @@ fun MapScreen(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(end = 16.dp)
+                .zIndex(1f)
                 .graphicsLayer {
                     translationY = fabOffset - with(density) { 80.dp.toPx() }
-                }
+                },
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         ) {
             Icon(Icons.Default.LocationOn, contentDescription = "Mi ubicación")
         }
