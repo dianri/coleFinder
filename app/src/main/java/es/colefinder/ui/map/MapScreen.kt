@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Call
@@ -56,17 +55,34 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberBottomSheetScaffoldState
-import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -96,9 +112,12 @@ import com.google.maps.android.compose.MarkerState
 import es.colefinder.data.model.Colegio
 import es.colefinder.ui.utils.createNumberedMarkerBitmap
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+
+enum class MapSheetValue { Collapsed, Intermediate, Expanded }
 
 @SuppressLint("MissingPermission")
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun MapScreen(
     viewModel: MapViewModel = hiltViewModel()
@@ -106,13 +125,80 @@ fun MapScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    
-    val scaffoldState = rememberBottomSheetScaffoldState(
-        bottomSheetState = rememberStandardBottomSheetState(
-            initialValue = SheetValue.PartiallyExpanded,
-            skipHiddenState = true
+    val density = LocalDensity.current
+
+    // 1. Estados del BottomSheet Custom con AnchoredDraggable
+    var headerHeight by remember { mutableStateOf(0f) }
+    var filtersHeight by remember { mutableStateOf(0f) }
+    var containerHeight by remember { mutableStateOf(0f) }
+
+    val anchoredDraggableState: AnchoredDraggableState<MapSheetValue> = remember {
+        AnchoredDraggableState(
+            initialValue = MapSheetValue.Intermediate,
+            positionalThreshold = { distance: Float -> distance * 0.5f },
+            velocityThreshold = { with(density) { 100.dp.toPx() } },
+            snapAnimationSpec = SpringSpec<Float>(),
+            decayAnimationSpec = exponentialDecay<Float>()
         )
-    )
+    }
+
+    val navBarPx = WindowInsets.navigationBars.getBottom(density).toFloat()
+
+    // Custom NestedScrollConnection para delegar a AnchoredDraggable manual si nestedScrollConnection falla
+    val customNestedScrollConnection = remember(anchoredDraggableState) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                return if (delta < 0 && source == NestedScrollSource.UserInput) {
+                    val consumed = anchoredDraggableState.dispatchRawDelta(delta)
+                    Offset(0f, consumed)
+                } else {
+                    Offset.Zero
+                }
+            }
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                return if (source == NestedScrollSource.UserInput) {
+                    val consumedDelta = anchoredDraggableState.dispatchRawDelta(delta)
+                    Offset(0f, consumedDelta)
+                } else {
+                    Offset.Zero
+                }
+            }
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                val velocity = available.y
+                return if (velocity < 0) {
+                    anchoredDraggableState.settle(velocity)
+                    available
+                } else {
+                    Velocity.Zero
+                }
+            }
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                val velocity = available.y
+                anchoredDraggableState.settle(velocity)
+                return available
+            }
+        }
+    }
+
+    SideEffect {
+        if (containerHeight > 0 && headerHeight > 0) {
+            // hCollapsed: el tope del sheet queda a (altura total - el cabezal visible por encima de la nav bar)
+            // Ya que aplicamos navigationBarsPadding() abajo, el headerHeight medido NO incluye la barra de navegación.
+            val hCollapsed = containerHeight - headerHeight - navBarPx
+            val hIntermediate = containerHeight - (headerHeight + filtersHeight) - navBarPx
+            val hExpanded = with(density) { 80.dp.toPx() } // Espacio para la SearchBar
+
+            anchoredDraggableState.updateAnchors(
+                DraggableAnchors {
+                    MapSheetValue.Collapsed at hCollapsed
+                    MapSheetValue.Intermediate at hIntermediate
+                    MapSheetValue.Expanded at hExpanded
+                }
+            )
+        }
+    }
     
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
@@ -137,282 +223,295 @@ fun MapScreen(
         )
     }
 
-    // Carga inicial: usa ubicación real si el permiso ya está concedido; si falla en cualquier punto,
-    // el ViewModel cae al fallback por defecto (Madrid). Se ejecuta exactamente una vez.
     LaunchedEffect(Unit) {
         if (locationPermissionsState.allPermissionsGranted) {
             try {
-                fusedLocationClient.lastLocation
-                    .addOnSuccessListener { location ->
-                        val latLng = location?.let {
-                            com.google.android.gms.maps.model.LatLng(it.latitude, it.longitude)
-                        }
-                        Log.d("MapScreen", "Startup: lastLocation=$latLng")
-                        viewModel.initializeMap(latLng)
-                    }
-                    .addOnFailureListener { e ->
-                        Log.w("MapScreen", "Startup: lastLocation falló (${e.message}), usando por defecto")
-                        viewModel.initializeMap(null)
-                    }
-            } catch (e: Exception) {
-                Log.w("MapScreen", "Startup: excepción obteniendo ubicación (${e.message}), usando por defecto")
-                viewModel.initializeMap(null)
-            }
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    val latLng = location?.let { LatLng(it.latitude, it.longitude) }
+                    viewModel.initializeMap(latLng)
+                }.addOnFailureListener { viewModel.initializeMap(null) }
+            } catch (e: Exception) { viewModel.initializeMap(null) }
         } else {
-            Log.d("MapScreen", "Startup: sin permiso de ubicación, cargando por defecto")
             viewModel.initializeMap(null)
         }
     }
 
-    BottomSheetScaffold(
-        scaffoldState = scaffoldState,
-        sheetPeekHeight = 200.dp,
-        sheetContent = {
-            BottomSheetContent(
-                state = state,
-                onFiltroTitularidadChange = { viewModel.toggleFiltroTitularidad(it) },
-                onFiltroTipoCentroChange  = { viewModel.toggleFiltroTipoCentro(it) },
-                onColegioClick = { colegioConDistancia ->
-                    scope.launch { scaffoldState.bottomSheetState.partialExpand() }
-                    viewModel.moverAColegio(
-                        LatLng(colegioConDistancia.colegio.latitud, colegioConDistancia.colegio.longitud),
-                        colegioConDistancia
-                    )
-                }
-            )
-        },
-        sheetDragHandle = {
-            Surface(
-                modifier = Modifier.padding(top = 10.dp, bottom = 0.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(50)
-            ) {
-                Box(modifier = Modifier.size(width = 32.dp, height = 4.dp))
-            }
-        }
-    ) { padding ->
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)) {
-            
-            GoogleMap(
-                modifier = Modifier.fillMaxSize(),
-                cameraPositionState = state.cameraPosition,
-                onMapLongClick = { latLng ->
-                    viewModel.onMapLongClick(latLng)
-                },
-                onMapClick = {
-                    viewModel.clearSelectedColegio()
-                },
-                properties = MapProperties(
-                    isMyLocationEnabled = locationPermissionsState.allPermissionsGranted
-                ),
-                uiSettings = uiSettings
-            ) {
-                // Marcador de Referencia
-                state.puntoReferencia?.let {
-                    Marker(
-                        state = MarkerState(position = it),
-                        title = "Punto de Referencia",
-                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
-                    )
-                }
-
-                // Colegios
-                state.colegiosConDistancia.forEachIndexed { index, colegioConDist ->
-                    val colegio = colegioConDist.colegio
-                    key(colegio.id) {
-                        val numberLabel = (index + 1).toString()
-                        val markerColor = colorParaTitularidad(colegio.tipo, colegioConDist.titularidadNormalizada)
-
-                        val icon = remember(colegio.id, numberLabel, markerColor, state.puntoReferencia) {
-                            createNumberedMarkerBitmap(context, numberLabel, markerColor)
-                        }
-
-                        Marker(
-                            state = MarkerState(position = LatLng(colegio.latitud, colegio.longitud)),
-                            title = colegio.nombre,
-                            snippet = colegio.tipo,
-                            icon = icon,
-                            onClick = {
-                                viewModel.onColegioClick(colegioConDist)
-                                true
-                            }
-                        )
-                    }
-                }
-            }
-
-            // SearchBar M3
-            SearchBar(
-                query = searchQuery,
-                onQueryChange = { 
-                    searchQuery = it
-                    viewModel.onSearchQueryChanged(it, context)
-                },
-                onSearch = {
-                    viewModel.buscarDireccion(searchQuery, context)
-                    searchActive = false
-                },
-                active = searchActive,
-                onActiveChange = { 
-                    searchActive = it 
-                    if (!it) searchQuery = ""
-                },
-                placeholder = { Text("Buscar colegio o dirección...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (searchActive && searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = null)
-                        }
-                    } else if (!searchActive) {
-                        Icon(
-                            imageVector = Icons.Default.AccountCircle,
-                            contentDescription = "Perfil",
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(if (searchActive) 0.dp else 16.dp)
-                    .fillMaxWidth()
-            ) {
-                // Sugerencias combinadas: Geocoder + Colegios Locales
-                LazyColumn {
-                    // Sugerencias del Geocoder
-                    items(state.suggestions.size) { index ->
-                        val suggestion = state.suggestions[index]
-                        ListItem(
-                            headlineContent = { Text(suggestion.title) },
-                            supportingContent = { Text(suggestion.subtitle) },
-                            leadingContent = { Icon(Icons.Default.LocationOn, contentDescription = null) },
-                            modifier = Modifier.clickable {
-                                searchQuery = suggestion.title
-                                searchActive = false
-                                viewModel.selectSuggestion(suggestion)
-                            }
-                        )
-                    }
-
-                    // Sugerencias de colegios si el Geocoder está vacío o como complemento
-                    if (searchQuery.isNotEmpty()) {
-                        val filteredColegios = state.colegiosCercanos
-                            .filter { it.colegio.nombre.contains(searchQuery, ignoreCase = true) }
-                            .take(5)
-
-                        items(filteredColegios.size) { index ->
-                            val item = filteredColegios[index]
-                            val colegio = item.colegio
-                            ListItem(
-                                headlineContent = { Text(colegio.nombre) },
-                                supportingContent = { Text(colegio.localidad) },
-                                leadingContent = { Icon(Icons.Default.Search, contentDescription = null) },
-                                modifier = Modifier.clickable {
-                                    searchQuery = colegio.nombre
-                                    searchActive = false
-                                    viewModel.moverAColegio(LatLng(colegio.latitud, colegio.longitud), item)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Card de Detalle
-            AnimatedVisibility(
-                visible = state.selectedColegioConDistancia != null,
-                enter = slideInVertically { it } + fadeIn(),
-                exit = slideOutVertically { it } + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp)
-                    .padding(bottom = 160.dp)
-            ) {
-                state.selectedColegioConDistancia?.let { colegioConDistancia ->
-                    val colegio = colegioConDistancia.colegio
-                    ColegioDetailCard(
-                        colegioConDistancia = colegioConDistancia,
-                        isFavorito = colegio.id in state.favoritosIds,
-                        onClose = { viewModel.clearSelectedColegio() },
-                        onFavorito = { viewModel.toggleFavorito(colegio.id) },
-                        onNavigate = {
-                            val uri = Uri.parse("google.navigation:q=${colegio.latitud},${colegio.longitud}")
-                            val mapIntent = Intent(Intent.ACTION_VIEW, uri)
-                            mapIntent.setPackage("com.google.android.apps.maps")
-                            try {
-                                context.startActivity(mapIntent)
-                            } catch (e: Exception) {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                            }
-                        },
-                        onCall = {
-                            colegio.telefono?.let { tel ->
-                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$tel"))
-                                context.startActivity(intent)
-                            }
-                        },
-                        onVerDetalle = {
-                            val query = buildString {
-                                append(colegio.nombre)
-                                if (colegio.direccion.isNotBlank()) append(", ${colegio.direccion}")
-                                if (colegio.localidad.isNotBlank()) append(", ${colegio.localidad}")
-                            }
-                            val uri = Uri.parse("geo:0,0?q=${Uri.encode(query)}")
-                            val mapIntent = Intent(Intent.ACTION_VIEW, uri)
-                                .setPackage("com.google.android.apps.maps")
-                            try {
-                                context.startActivity(mapIntent)
-                            } catch (e: Exception) {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                            }
-                        }
-                    )
-                }
-            }
-
-            if (state.isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().onSizeChanged { containerHeight = it.height.toFloat() }) {
+        val fullHeight = constraints.maxHeight.toFloat()
+        
+        // Capa 1: Mapa
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = state.cameraPosition,
+            onMapLongClick = { viewModel.onMapLongClick(it) },
+            onMapClick = { viewModel.clearSelectedColegio() },
+            properties = MapProperties(isMyLocationEnabled = locationPermissionsState.allPermissionsGranted),
+            uiSettings = uiSettings
+        ) {
+            state.puntoReferencia?.let {
+                Marker(
+                    state = MarkerState(position = it),
+                    title = "Punto de Referencia",
+                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
                 )
             }
-            
-            state.error?.let {
-                Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-            }
-
-            // Botón de Ubicación anclado manualmente al tope del BottomSheet
-            val density = LocalDensity.current
-            val fabOffset by remember {
-                derivedStateOf {
-                    runCatching { scaffoldState.bottomSheetState.requireOffset() }.getOrNull() ?: 0f
+            state.colegiosConDistancia.forEachIndexed { index, colegioConDist ->
+                val colegio = colegioConDist.colegio
+                key(colegio.id) {
+                    val numberLabel = (index + 1).toString()
+                    val markerColor = colorParaTitularidad(colegio.tipo, colegioConDist.titularidadNormalizada)
+                    val icon = remember(colegio.id, numberLabel, markerColor, state.puntoReferencia) {
+                        createNumberedMarkerBitmap(context, numberLabel, markerColor)
+                    }
+                    Marker(
+                        state = MarkerState(position = LatLng(colegio.latitud, colegio.longitud)),
+                        title = colegio.nombre,
+                        snippet = colegio.tipo,
+                        icon = icon,
+                        onClick = {
+                            viewModel.onColegioClick(colegioConDist)
+                            true
+                        }
+                    )
                 }
             }
+        }
 
-            FloatingActionButton(
-                onClick = {
-                    if (locationPermissionsState.allPermissionsGranted) {
-                        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                            location?.let {
-                                viewModel.updateUserLocation(LatLng(it.latitude, it.longitude))
-                            } ?: run {
-                                Toast.makeText(context, "No se pudo obtener la ubicación. Activa el GPS.", Toast.LENGTH_SHORT).show()
+        // Capa 2: Persistent Bottom Sheet
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .offset {
+                    val y = runCatching { anchoredDraggableState.requireOffset() }.getOrDefault(fullHeight)
+                    IntOffset(0, y.roundToInt())
+                }
+                .anchoredDraggable(anchoredDraggableState, Orientation.Vertical)
+                .nestedScroll(customNestedScrollConnection),
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            shadowElevation = 16.dp, // Elevación para sombra visual
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .navigationBarsPadding() // Asegura que el contenido no quede tras la nav bar
+            ) {
+                // Cabecera: Manejador + Título
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { 
+                            if (it.height > 0) headerHeight = it.height.toFloat() 
+                        }
+                        .clickable {
+                            scope.launch {
+                                val target = if (anchoredDraggableState.currentValue == MapSheetValue.Collapsed) 
+                                    MapSheetValue.Intermediate else MapSheetValue.Collapsed
+                                anchoredDraggableState.animateTo(target)
                             }
                         }
+                        .padding(bottom = 8.dp), // Padding extra para el área táctil
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Surface(
+                        modifier = Modifier.padding(top = 10.dp, bottom = 8.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Box(modifier = Modifier.size(width = 36.dp, height = 4.dp))
+                    }
+                    Text(
+                        text = "Centros cercanos",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp)
+                    )
+                }
+
+                // Sección Intermedia: Filtros
+                Column(modifier = Modifier.onSizeChanged { filtersHeight = it.height.toFloat() }) {
+                    FiltroChipRow(
+                        titulo = "Titularidad",
+                        opciones = TitularidadFiltro.entries,
+                        seleccionados = state.filtrosTitularidad,
+                        etiqueta = { it.label },
+                        colorChip = { colorParaTitularidadFiltro(it) },
+                        onSeleccionar = { viewModel.toggleFiltroTitularidad(it) }
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    FiltroChipRow(
+                        titulo = "Tipo de centro",
+                        opciones = TipoCentroFiltro.entries,
+                        seleccionados = state.filtrosTipoCentro,
+                        etiqueta = { it.label },
+                        colorChip = { colorParaTipoCentroFiltro(it) },
+                        onSeleccionar = { viewModel.toggleFiltroTipoCentro(it) }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp)) // Espacio extra para evitar que asome el listado
+                }
+
+                // Sección Extendida: Lista
+                Box(modifier = Modifier.weight(1f)) {
+                    if (state.colegiosConDistancia.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "No hay centros de este tipo cerca de ti",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     } else {
-                        locationPermissionsState.launchMultiplePermissionRequest()
+                        val listState = rememberLazyListState()
+                        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                            items(
+                                count = state.colegiosConDistancia.size,
+                                key = { index -> state.colegiosConDistancia[index].colegio.id }
+                            ) { index ->
+                                val item = state.colegiosConDistancia[index]
+                                val colegio = item.colegio
+                                val distText = if (item.distanciaMetros >= 1000) "%.1f km".format(item.distanciaMetros / 1000) else "${item.distanciaMetros.toInt()} m"
+
+                                ListItem(
+                                    leadingContent = {
+                                        Badge(containerColor = colorParaTitularidad(colegio.tipo, item.titularidadNormalizada)) {
+                                            Text((index + 1).toString(), color = Color.White)
+                                        }
+                                    },
+                                    headlineContent = { Text(colegio.nombre, fontWeight = FontWeight.Bold) },
+                                    supportingContent = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("A $distText de ti")
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(colegio.tipo, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                        }
+                                    },
+                                    modifier = Modifier.clickable {
+                                        scope.launch { anchoredDraggableState.animateTo(MapSheetValue.Intermediate) }
+                                        viewModel.moverAColegio(LatLng(colegio.latitud, colegio.longitud), item)
+                                    }
+                                )
+                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                            }
+                        }
                     }
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(end = 16.dp)
-                    .graphicsLayer {
-                        translationY = fabOffset - with(density) { 80.dp.toPx() } // Posición relativa al tope del sheet
-                    }
-            ) {
-                Icon(Icons.Default.LocationOn, contentDescription = "Mi ubicación")
+                }
             }
+        }
+
+        // Overlays: SearchBar
+        SearchBar(
+            query = searchQuery,
+            onQueryChange = { 
+                searchQuery = it
+                viewModel.onSearchQueryChanged(it, context)
+            },
+            onSearch = {
+                viewModel.buscarDireccion(searchQuery, context)
+                searchActive = false
+            },
+            active = searchActive,
+            onActiveChange = { 
+                searchActive = it 
+                if (!it) searchQuery = ""
+            },
+            placeholder = { Text("Buscar colegio o dirección...") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                if (searchActive && searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Close, contentDescription = null)
+                    }
+                } else if (!searchActive) {
+                    Icon(imageVector = Icons.Default.AccountCircle, contentDescription = "Perfil", modifier = Modifier.padding(end = 8.dp))
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(if (searchActive) 0.dp else 16.dp)
+                .fillMaxWidth()
+        ) {
+            LazyColumn {
+                items(state.suggestions.size) { index ->
+                    val suggestion = state.suggestions[index]
+                    ListItem(
+                        headlineContent = { Text(suggestion.title) },
+                        supportingContent = { Text(suggestion.subtitle) },
+                        leadingContent = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+                        modifier = Modifier.clickable {
+                            searchQuery = suggestion.title
+                            searchActive = false
+                            viewModel.selectSuggestion(suggestion)
+                        }
+                    )
+                }
+            }
+        }
+
+        // Overlay: Detail Card
+        AnimatedVisibility(
+            visible = state.selectedColegioConDistancia != null,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp)
+                .padding(bottom = 80.dp) // No obstruir el estado colapsado
+        ) {
+            state.selectedColegioConDistancia?.let { colegioConDistancia ->
+                val colegio = colegioConDistancia.colegio
+                ColegioDetailCard(
+                    colegioConDistancia = colegioConDistancia,
+                    isFavorito = colegio.id in state.favoritosIds,
+                    onClose = { viewModel.clearSelectedColegio() },
+                    onFavorito = { viewModel.toggleFavorito(colegio.id) },
+                    onNavigate = {
+                        val uri = Uri.parse("google.navigation:q=${colegio.latitud},${colegio.longitud}")
+                        val mapIntent = Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps")
+                        try { context.startActivity(mapIntent) } catch (e: Exception) { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                    },
+                    onCall = { colegio.telefono?.let { tel -> context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$tel"))) } },
+                    onVerDetalle = {
+                        val query = Uri.encode("${colegio.nombre}, ${colegio.direccion}, ${colegio.localidad}")
+                        val uri = Uri.parse("geo:0,0?q=$query")
+                        val mapIntent = Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps")
+                        try { context.startActivity(mapIntent) } catch (e: Exception) { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                    }
+                )
+            }
+        }
+
+        if (state.isLoading) { CircularProgressIndicator(modifier = Modifier.align(Alignment.Center)) }
+        state.error?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+
+        // Overlay: Location FAB
+        val fabOffset by remember(fullHeight) {
+            derivedStateOf {
+                try {
+                    anchoredDraggableState.requireOffset()
+                } catch (e: Exception) {
+                    fullHeight
+                }
+            }
+        }
+        FloatingActionButton(
+            onClick = {
+                if (locationPermissionsState.allPermissionsGranted) {
+                    fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                        loc?.let { viewModel.updateUserLocation(LatLng(it.latitude, it.longitude)) }
+                        ?: Toast.makeText(context, "Activa el GPS", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    locationPermissionsState.launchMultiplePermissionRequest()
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = 16.dp)
+                .graphicsLayer {
+                    translationY = fabOffset - with(density) { 80.dp.toPx() }
+                }
+        ) {
+            Icon(Icons.Default.LocationOn, contentDescription = "Mi ubicación")
         }
     }
 }
@@ -428,11 +527,7 @@ fun ColegioDetailCard(
     onVerDetalle: () -> Unit
 ) {
     val colegio = colegioConDistancia.colegio
-    val distText = if (colegioConDistancia.distanciaMetros >= 1000)
-        "%.1f km".format(colegioConDistancia.distanciaMetros / 1000)
-    else
-        "${colegioConDistancia.distanciaMetros.toInt()} m"
-
+    val distText = if (colegioConDistancia.distanciaMetros >= 1000) "%.1f km".format(colegioConDistancia.distanciaMetros / 1000) else "${colegioConDistancia.distanciaMetros.toInt()} m"
     val titularidadColor = colorParaTitularidad(colegio.tipo, colegioConDistancia.titularidadNormalizada)
     val titularidadLabel = labelParaTitularidad(colegioConDistancia.titularidadNormalizada, colegio.tipo)
     val tipoCentroColor  = colorParaTipoCentroClasificado(colegioConDistancia.tipoCentroClasificado)
@@ -446,8 +541,6 @@ fun ColegioDetailCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-
-            // 1. CABECERA: nombre + favorito + cerrar
             Row(verticalAlignment = Alignment.Top) {
                 Text(
                     text = colegio.nombre,
@@ -464,238 +557,60 @@ fun ColegioDetailCard(
                         tint = if (isFavorito) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Cerrar")
-                }
+                IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Close, contentDescription = "Cerrar") }
             }
-
             Spacer(modifier = Modifier.height(10.dp))
-
-            // 2. CHIPS: titularidad · tipo · distancia
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 InfoChip(label = titularidadLabel, color = titularidadColor)
                 InfoChip(label = tipoCentroLabel,  color = tipoCentroColor)
-                InfoChip(label = distText,          color = ColorFiltroTodos)
+                InfoChip(label = distText, color = ColorFiltroTodos)
             }
-
             Spacer(modifier = Modifier.height(14.dp))
-
-            // 3. DIRECCIÓN
             Row(verticalAlignment = Alignment.Top) {
-                Icon(
-                    imageVector = Icons.Default.LocationOn,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(18.dp)
-                        .padding(top = 2.dp)
-                )
+                Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp).padding(top = 2.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Column {
-                    Text(
-                        text = colegio.direccion,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (colegio.localidad.isNotBlank()) {
-                        Text(
-                            text = colegio.localidad,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(text = colegio.direccion, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                    if (colegio.localidad.isNotBlank()) { Text(text = colegio.localidad, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
-
-            // 4. TELÉFONO (solo si existe)
             if (hayTelefono) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Call,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Icon(Icons.Default.Call, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = colegio.telefono!!,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(text = colegio.telefono!!, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-
             Spacer(modifier = Modifier.height(16.dp))
-
-            // 5. BOTONES DE ACCIÓN
-            // Fila 1: acción primaria a ancho completo.
-            Button(
-                onClick = onNavigate,
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            Button(onClick = onNavigate, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Navegar")
             }
-
-            // Fila 2: acciones secundarias. Con teléfono → dos columnas; sin teléfono → Detalle ancho completo.
             Spacer(modifier = Modifier.height(8.dp))
-            if (hayTelefono) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onCall,
-                        modifier = Modifier.weight(1f)
-                    ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (hayTelefono) {
+                    OutlinedButton(onClick = onCall, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Llamar")
                     }
-                    OutlinedButton(
-                        onClick = onVerDetalle,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Detalle")
-                    }
                 }
-            } else {
-                OutlinedButton(
-                    onClick = onVerDetalle,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                OutlinedButton(onClick = onVerDetalle, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Ver detalle")
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Detalle")
                 }
             }
         }
     }
 }
 
-/** Chip informativo no interactivo con fondo semitransparente y texto coloreado. */
 @Composable
 private fun InfoChip(label: String, color: Color) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = color.copy(alpha = 0.15f),
-        contentColor = color
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BottomSheetContent(
-    state: MapState,
-    onFiltroTitularidadChange: (TitularidadFiltro) -> Unit,
-    onFiltroTipoCentroChange: (TipoCentroFiltro) -> Unit,
-    onColegioClick: (ColegioConDistancia) -> Unit
-) {
-    val listState = rememberLazyListState()
-
-    LaunchedEffect(state.filtrosTitularidad, state.filtrosTipoCentro) {
-        listState.scrollToItem(0)
-    }
-
-    Column(modifier = Modifier.padding(bottom = 32.dp)) {
-        Text(
-            text = "Centros cercanos",
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(horizontal = 16.dp).padding(top = 0.dp, bottom = 2.dp)
-        )
-
-        FiltroChipRow(
-            titulo = "Titularidad",
-            opciones = TitularidadFiltro.entries,
-            seleccionados = state.filtrosTitularidad,
-            etiqueta = { it.label },
-            colorChip = { colorParaTitularidadFiltro(it) },
-            onSeleccionar = onFiltroTitularidadChange
-        )
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        FiltroChipRow(
-            titulo = "Tipo de centro",
-            opciones = TipoCentroFiltro.entries,
-            seleccionados = state.filtrosTipoCentro,
-            etiqueta = { it.label },
-            colorChip = { colorParaTipoCentroFiltro(it) },
-            onSeleccionar = onFiltroTipoCentroChange
-        )
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        if (state.colegiosConDistancia.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No hay centros de este tipo cerca de ti",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(state = listState) {
-                items(
-                    count = state.colegiosConDistancia.size,
-                    key = { index -> state.colegiosConDistancia[index].colegio.id }
-                ) { index ->
-                    val item = state.colegiosConDistancia[index]
-                    val colegio = item.colegio
-                    val dist = item.distanciaMetros
-                    val distText = if (dist >= 1000) {
-                        String.format("%.1f km", dist / 1000)
-                    } else {
-                        "${dist.toInt()} m"
-                    }
-
-                    ListItem(
-                        leadingContent = {
-                            Badge(containerColor = colorParaTitularidad(colegio.tipo, item.titularidadNormalizada)) {
-                                Text((index + 1).toString(), color = Color.White)
-                            }
-                        },
-                        headlineContent = {
-                            Text(colegio.nombre, fontWeight = FontWeight.Bold)
-                        },
-                        supportingContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("A $distText de ti")
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    colegio.tipo,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        },
-                        modifier = Modifier.clickable { onColegioClick(item) }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                }
-            }
-        }
+    Surface(shape = RoundedCornerShape(50), color = color.copy(alpha = 0.15f), contentColor = color) {
+        Text(text = label, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -710,18 +625,8 @@ private fun <T> FiltroChipRow(
     onSeleccionar: (T) -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Text(
-            text = titulo,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 0.dp)
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        Text(text = titulo, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             opciones.forEach { opcion ->
                 val selected = opcion in seleccionados
                 val color = colorChip(opcion)
@@ -729,15 +634,7 @@ private fun <T> FiltroChipRow(
                     selected = selected,
                     onClick = { onSeleccionar(opcion) },
                     label = { Text(etiqueta(opcion)) },
-                    leadingIcon = if (selected) {
-                        {
-                            Icon(
-                                Icons.Default.Done,
-                                contentDescription = null,
-                                modifier = Modifier.size(FilterChipDefaults.IconSize)
-                            )
-                        }
-                    } else null,
+                    leadingIcon = if (selected) { { Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) } } else null,
                     colors = FilterChipDefaults.filterChipColors(
                         containerColor = color.copy(alpha = 0.12f),
                         labelColor = color,
@@ -745,12 +642,7 @@ private fun <T> FiltroChipRow(
                         selectedLabelColor = Color.White,
                         selectedLeadingIconColor = Color.White
                     ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = selected,
-                        borderColor = color.copy(alpha = 0.5f),
-                        selectedBorderColor = Color.Transparent
-                    )
+                    border = FilterChipDefaults.filterChipBorder(enabled = true, selected = selected, borderColor = color.copy(alpha = 0.5f), selectedBorderColor = Color.Transparent)
                 )
             }
         }
