@@ -13,6 +13,8 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
@@ -111,6 +113,7 @@ import androidx.core.app.ActivityCompat
 import android.content.pm.PackageManager
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
+import kotlinx.coroutines.delay
 import com.google.maps.android.compose.CameraMoveStartedReason
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
@@ -592,11 +595,54 @@ fun MapScreen(
             Icon(Icons.Default.LocationOn, contentDescription = "Mi ubicación")
         }
 
-        // Host para el hint contextual
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp) // Encima del sheet colapsado
-        )
+        // Hint contextual para Long Press (Capa superior absoluta)
+        LaunchedEffect(state.showLongPressHint) {
+            if (state.showLongPressHint) {
+                delay(4000)
+                viewModel.onHintDismissed()
+            }
+        }
+
+        AnimatedVisibility(
+            visible = state.showLongPressHint,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .zIndex(3f)
+                .graphicsLayer {
+                    // Posicionar justo encima del sheet (fabOffset es el tope del sheet)
+                    // Restamos la altura aproximada del chip (48dp) + un margen de seguridad (16dp)
+                    translationY = fabOffset - with(density) { 64.dp.toPx() }
+                }
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                tonalElevation = 6.dp,
+                shadowElevation = 6.dp,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Mantén pulsado para buscar centros aquí",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 
