@@ -17,11 +17,14 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -57,6 +60,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SearchBar
@@ -448,25 +452,68 @@ fun MapScreen(
                                 val colegio = item.colegio
                                 val distText = if (item.distanciaMetros >= 1000) "%.1f km".format(item.distanciaMetros / 1000) else "${item.distanciaMetros.toInt()} m"
 
-                                ListItem(
-                                    leadingContent = {
-                                        Badge(containerColor = colorParaTitularidad(colegio.tipo, item.titularidadNormalizada)) {
-                                            Text((index + 1).toString(), color = Color.White)
+                                val titularidadLabel = labelParaTitularidad(item.titularidadNormalizada, colegio.tipo)
+                                val esDificil = colegio.esDificilDesempeno
+                                val itemBgColor = if (esDificil) Color(0xFFFFEBEE) else Color.Transparent
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Min)
+                                        .background(itemBgColor)
+                                        .clickable {
+                                            scope.launch { anchoredDraggableState.animateTo(MapSheetValue.Intermediate) }
+                                            viewModel.moverAColegio(LatLng(colegio.latitud, colegio.longitud), item)
                                         }
-                                    },
-                                    headlineContent = { Text(colegio.nombre, fontWeight = FontWeight.Bold) },
-                                    supportingContent = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text("A $distText de ti")
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(colegio.tipo, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                                        }
-                                    },
-                                    modifier = Modifier.clickable {
-                                        scope.launch { anchoredDraggableState.animateTo(MapSheetValue.Intermediate) }
-                                        viewModel.moverAColegio(LatLng(colegio.latitud, colegio.longitud), item)
+                                ) {
+                                    if (esDificil) {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.CenterStart)
+                                                .width(4.dp)
+                                                .fillMaxHeight()
+                                                .background(Color(0xFFEF5350))
+                                        )
                                     }
-                                )
+
+                                    ListItem(
+                                        leadingContent = {
+                                            Badge(containerColor = colorParaTitularidad(colegio.tipo, item.titularidadNormalizada)) {
+                                                Text((index + 1).toString(), color = Color.White)
+                                            }
+                                        },
+                                        headlineContent = { Text(colegio.nombre, fontWeight = FontWeight.Bold) },
+                                        supportingContent = {
+                                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text(
+                                                    text = "${colegio.localidad} · $titularidadLabel",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                if (esDificil) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = Color(0xFFFFCDD2), // Rojo suave para el chip
+                                                        modifier = Modifier.padding(top = 2.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "Difícil desempeño",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFFB71C1C),
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Text(
+                                                    text = "A $distText de ti",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        },
+                                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                                    )
+                                }
                                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                             }
                         }
