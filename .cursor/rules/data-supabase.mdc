@@ -33,6 +33,7 @@ Es la **única tabla de lectura** que usa la app. La app no hace `insert`/`updat
 | `categoria_madrid` | `text` | URL path de categoría (solo fuente `datos.madrid.es`) |
 | `tipo_centro_normalizado` | `text` | **Normalizado en BD**: `PRIMARIA`, `SECUNDARIA`, `FP`, `ADULTOS`, `ESPECIAL`, `OTROS` |
 | `titularidad_normalizada` | `text` | **Normalizado en BD**: `PUBLICO`, `CONCERTADO`, `PRIVADO`, `OTRO` |
+| `es_dificil_desempeno` | `boolean` | **Default false**. Indica centros de difícil desempeño para docentes. |
 
 **Unicidad:** índice `colegios_fuente_fuente_id_key` en `(fuente, fuente_id)`.
 
@@ -66,7 +67,8 @@ nearby_colegios(
 
 -- Campos devueltos
 id, nombre, direccion, localidad, provincia, tipo, latitud, longitud, telefono,
-descripcion_entidad, tipo_centro_normalizado, titularidad_normalizada, distancia_metros
+descripcion_entidad, tipo_centro_normalizado, titularidad_normalizada, 
+distancia_metros, es_dificil_desempeno
 ```
 
 - Los filtros usan `= ANY(array)` en SQL. Si el array es NULL, no se aplica restricción.
@@ -100,7 +102,8 @@ data class Colegio(
     val tipo: String,
     val latitud: Double,
     val longitud: Double,
-    val telefono: String?
+    val telefono: String?,
+    val esDificilDesempeno: Boolean = false
 )
 ```
 
@@ -120,6 +123,7 @@ data class NearbyColegioDto(
     @SerialName("descripcion_entidad")     val descripcionEntidad: String? = null,
     @SerialName("tipo_centro_normalizado") val tipoCentroNormalizado: String? = null,
     @SerialName("titularidad_normalizada") val titularidadNormalizada: String? = null,
+    @SerialName("es_dificil_desempeno")    val esDificilDesempeno: Boolean = false,
     @SerialName("distancia_metros")        val distanciaMetros: Double
 )
 ```

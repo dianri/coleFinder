@@ -84,6 +84,8 @@ Todos los colores de marcadores, badges y chips se resuelven desde las constante
 | Especial | `ColorChipEspecial` | Naranja quemado `#BF360C` |
 | Otros | `ColorChipOtros` | Gris `#757575` |
 | Todos (neutro) | `ColorFiltroTodos` | Blue-grey `#546E7A` |
+| Difícil Desempeño (Fondo) | - | `#FFFFEBEE` (Rojo muy suave) |
+| Difícil Desempeño (Texto)| - | `#B71C1C` (Rojo oscuro elegante) |
 
 ### Funciones de color
 ```kotlin
@@ -111,7 +113,7 @@ fun BottomSheetContent(
 - Usa `AnchoredDraggableState` en lugar de `BottomSheetScaffold` para control total.
 - Áncoras: `Collapsed` (solo header), `Intermediate` (header + filtros), `Expanded` (lista completa).
 - El estado `Expanded` debe respetar la altura de la `SearchBar` dinámicamente.
-- Implementar `NestedScrollConnection` para scroll fluido entre sheet y listas internas.
+- **Nested Scroll**: Implementar `NestedScrollConnection` con comprobación de offset real (`currentOffset > expandedOffset`) para asegurar inercia simétrica en la lista interna.
 
 ### `FloatingActionButton` (Ubicación)
 - Mantener siempre visible (pero con `zIndex` inferior a la tarjeta de detalle).
@@ -121,6 +123,9 @@ fun BottomSheetContent(
 ### `Detail Card` y Overlays
 - `ColegioDetailCard` debe aparecer desde abajo (`slideInVertically`).
 - Debe tener `zIndex` superior para cubrir el FAB y el sheet colapsado.
+- **Metadatos en dos filas**:
+  - Fila 1: Titularidad, Tipo, Distancia y Localidad (chips horizontales).
+  - Fila 2: Chip prominente de "Difícil desempeño" (solo si aplica).
 
 ### `FiltroChipRow<T>` (privado en `MapScreen.kt`)
 ```kotlin

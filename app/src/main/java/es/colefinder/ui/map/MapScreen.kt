@@ -218,18 +218,23 @@ fun MapScreen(
     val navBarPx = WindowInsets.navigationBars.getBottom(density).toFloat()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Custom NestedScrollConnection para delegar a AnchoredDraggable manual si nestedScrollConnection falla
+    // Custom NestedScrollConnection para coordinar el scroll entre la lista y el panel
     val customNestedScrollConnection = remember(anchoredDraggableState) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 val delta = available.y
-                return if (delta < 0 && source == NestedScrollSource.UserInput) {
+                // Solo consumimos hacia arriba si el panel NO ha llegado a su tope (Expanded)
+                val expandedOffset = try { anchoredDraggableState.anchors.positionOf(MapSheetValue.Expanded) } catch (_: Exception) { Float.NaN }
+                val currentOffset = try { anchoredDraggableState.requireOffset() } catch (_: Exception) { Float.NaN }
+
+                return if (delta < 0 && source == NestedScrollSource.UserInput && !expandedOffset.isNaN() && currentOffset > expandedOffset + 0.5f) {
                     val consumed = anchoredDraggableState.dispatchRawDelta(delta)
                     Offset(0f, consumed)
                 } else {
                     Offset.Zero
                 }
             }
+
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 val delta = available.y
                 return if (source == NestedScrollSource.UserInput) {
@@ -239,17 +244,24 @@ fun MapScreen(
                     Offset.Zero
                 }
             }
+
             override suspend fun onPreFling(available: Velocity): Velocity {
                 val velocity = available.y
-                return if (velocity < 0) {
+                val expandedOffset = try { anchoredDraggableState.anchors.positionOf(MapSheetValue.Expanded) } catch (_: Exception) { Float.NaN }
+                val currentOffset = try { anchoredDraggableState.requireOffset() } catch (_: Exception) { Float.NaN }
+
+                // Solo asentar el panel hacia arriba si todavía tiene recorrido
+                return if (velocity < 0 && !expandedOffset.isNaN() && currentOffset > expandedOffset + 0.5f) {
                     anchoredDraggableState.settle(velocity)
                     available
                 } else {
                     Velocity.Zero
                 }
             }
+
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 val velocity = available.y
+                // Capturar la inercia restante (ej: cuando la lista llega al tope arriba) para cerrar/ajustar el panel
                 anchoredDraggableState.settle(velocity)
                 return available
             }
@@ -737,10 +749,35 @@ fun ColegioDetailCard(
                 IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Close, contentDescription = "Cerrar") }
             }
             Spacer(modifier = Modifier.height(10.dp))
-            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                InfoChip(label = titularidadLabel, color = titularidadColor)
-                InfoChip(label = tipoCentroLabel,  color = tipoCentroColor)
-                InfoChip(label = distText, color = ColorFiltroTodos)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Fila 1: Metadatos estándar + Localidad
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    InfoChip(label = titularidadLabel, color = titularidadColor)
+                    InfoChip(label = tipoCentroLabel, color = tipoCentroColor)
+                    InfoChip(label = distText, color = MaterialTheme.colorScheme.primary)
+                    if (colegio.localidad.isNotBlank()) {
+                        InfoChip(label = colegio.localidad, color = MaterialTheme.colorScheme.secondary)
+                    }
+                }
+                
+                // Fila 2: Difícil desempeño (Solo si aplica)
+                if (colegio.esDificilDesempeno) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xFFFFEBEE),
+                        contentColor = Color(0xFFB71C1C)
+                    ) {
+                        Text(
+                            text = "Difícil desempeño",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.Top) {
