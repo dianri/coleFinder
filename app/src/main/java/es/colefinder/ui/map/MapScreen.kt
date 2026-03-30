@@ -112,11 +112,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.location.Priority
 import androidx.core.app.ActivityCompat
 import android.content.pm.PackageManager
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import kotlinx.coroutines.delay
 import com.google.maps.android.compose.CameraMoveStartedReason
 import com.google.maps.android.compose.GoogleMap
@@ -325,6 +327,54 @@ fun MapScreen(
     LaunchedEffect(state.cameraPosition.isMoving) {
         if (state.cameraPosition.isMoving) {
             viewModel.onMapMoved()
+        }
+    }
+
+    // Efecto para auto-ajustar cámara si los resultados son lejanos (Filtro 'Mi Ubicación' o Búsquedas)
+    LaunchedEffect(state.isLoading, state.focusedRequestType) {
+        if (!state.isLoading && state.focusedRequestType != FocusedRequestType.NONE && state.colegiosConDistancia.isNotEmpty()) {
+            // Un pequeño delay ayuda a asegurar que los marcadores y la proyección ya están listos
+            delay(500)
+            
+            val visibleBounds = state.cameraPosition.projection?.visibleRegion?.latLngBounds
+            if (visibleBounds != null) {
+                // Verificar si hay algún centro dentro del área visible actual (zoom 15)
+                val anyVisible = state.colegiosConDistancia.any { 
+                    visibleBounds.contains(LatLng(it.colegio.latitud, it.colegio.longitud)) 
+                }
+                
+                // Si están todos fuera (lejos), encuadramos con auto-fit
+                if (!anyVisible) {
+                    val boundsBuilder = LatLngBounds.builder()
+                    state.colegiosConDistancia.forEach { 
+                        boundsBuilder.include(LatLng(it.colegio.latitud, it.colegio.longitud)) 
+                    }
+                    
+                    // Incluimos también el punto de referencia del tipo de búsqueda
+                    val refLocation = when (state.focusedRequestType) {
+                        FocusedRequestType.MY_LOCATION -> state.userLocation
+                        FocusedRequestType.POINT -> state.puntoReferencia
+                        else -> state.cameraPosition.position.target
+                    }
+                    refLocation?.let { boundsBuilder.include(it) }
+                    
+                    try {
+                        state.cameraPosition.animate(
+                            CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 250) // Padding generoso
+                        )
+                        viewModel.setMostrarAvisoCentrosLejanos(true)
+                    } catch (_: Exception) { /* Ignorar si falla el encuadre */ }
+                }
+            }
+            viewModel.consumeFocusedRequest()
+        }
+    }
+
+    // Auto-dismiss para el aviso de centros lejanos
+    LaunchedEffect(state.showRemoteResultsWarning) {
+        if (state.showRemoteResultsWarning) {
+            delay(6000)
+            viewModel.setMostrarAvisoCentrosLejanos(false)
         }
     }
 
@@ -699,6 +749,54 @@ fun MapScreen(
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )
+                }
+            }
+        }
+
+        // 5. Aviso de Centros Lejanos (Capa superior)
+        AnimatedVisibility(
+            visible = state.showRemoteResultsWarning,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .zIndex(4f)
+                .padding(top = 100.dp) // Debajo del buscador
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                tonalElevation = 6.dp,
+                shadowElevation = 8.dp,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text(
+                        text = "No hay centros cerca; mostramos los más próximos",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(
+                        onClick = { viewModel.setMostrarAvisoCentrosLejanos(false) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Cerrar",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }

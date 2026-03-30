@@ -65,7 +65,7 @@ class MapViewModel @Inject constructor(
         if (userLatLng != null) {
             Log.d(TAG, "initializeMap: ubicación disponible (${userLatLng.latitude}, ${userLatLng.longitude})")
             viewModelScope.launch {
-                _state.update { it.copy(userLocation = userLatLng) }
+                _state.update { it.copy(userLocation = userLatLng, focusedRequestType = FocusedRequestType.MY_LOCATION) }
                 _state.value.cameraPosition.animate(
                     CameraUpdateFactory.newLatLngZoom(userLatLng, 15f)
                 )
@@ -161,6 +161,7 @@ class MapViewModel @Inject constructor(
     fun selectSuggestion(suggestion: SearchSuggestion) {
         _state.update { it.copy(suggestions = emptyList()) }
         viewModelScope.launch {
+            _state.update { it.copy(focusedRequestType = FocusedRequestType.SEARCH) }
             _state.value.cameraPosition.animate(
                 CameraUpdateFactory.newLatLngZoom(suggestion.latLng, 15f)
             )
@@ -170,7 +171,7 @@ class MapViewModel @Inject constructor(
 
     fun updateUserLocation(latLng: LatLng) {
         viewModelScope.launch {
-            _state.update { it.copy(userLocation = latLng, puntoReferencia = null) }
+            _state.update { it.copy(userLocation = latLng, puntoReferencia = null, focusedRequestType = FocusedRequestType.MY_LOCATION) }
             _state.value.cameraPosition.animate(
                 CameraUpdateFactory.newLatLngZoom(latLng, 15f)
             )
@@ -178,8 +179,16 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    fun consumeFocusedRequest() {
+        _state.update { it.copy(focusedRequestType = FocusedRequestType.NONE) }
+    }
+
+    fun setMostrarAvisoCentrosLejanos(show: Boolean) {
+        _state.update { it.copy(showRemoteResultsWarning = show) }
+    }
+
     fun onMapLongClick(latLng: LatLng) {
-        _state.update { it.copy(puntoReferencia = latLng, selectedColegioConDistancia = null) }
+        _state.update { it.copy(puntoReferencia = latLng, selectedColegioConDistancia = null, focusedRequestType = FocusedRequestType.POINT) }
         loadNearbyColegios(latLng.latitude, latLng.longitude)
         
         // Marcar como descubierto si no lo estaba
@@ -284,6 +293,7 @@ class MapViewModel @Inject constructor(
                 }
 
                 if (latLng != null) {
+                    _state.update { it.copy(focusedRequestType = FocusedRequestType.SEARCH) }
                     _state.value.cameraPosition.animate(
                         CameraUpdateFactory.newLatLngZoom(latLng, 15f)
                     )

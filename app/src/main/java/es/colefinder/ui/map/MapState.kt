@@ -4,6 +4,9 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.CameraPositionState
 import es.colefinder.data.model.Colegio
+import com.google.android.gms.maps.model.LatLngBounds
+
+enum class FocusedRequestType { NONE, MY_LOCATION, POINT, SEARCH }
 
 data class MapState(
     val isLoading: Boolean = false,
@@ -24,7 +27,9 @@ data class MapState(
     ),
     val showLongPressHint: Boolean = false,
     val hasDiscoveredLongPress: Boolean = false,
-    val longPressHintCount: Int = 0
+    val longPressHintCount: Int = 0,
+    val focusedRequestType: FocusedRequestType = FocusedRequestType.NONE,
+    val showRemoteResultsWarning: Boolean = false
 ) {
     /** Acceso directo al Colegio seleccionado para compatibilidad interna. */
     val selectedColegio: Colegio? get() = selectedColegioConDistancia?.colegio
