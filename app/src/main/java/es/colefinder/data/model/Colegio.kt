@@ -11,6 +11,13 @@ data class Colegio(
     val longitud: Double,
     val tipo: String,
     val localidad: String,
-    val telefono: String? = null,
-    val esDificilDesempeno: Boolean = false
+    val telefono: String?,
+    val esDificilDesempeno: Boolean = false,
+    val jornadaTipo: JornadaTipo = JornadaTipo.DESCONOCIDA
 )
+
+enum class JornadaTipo(val label: String) {
+    CONTINUA("Continua"),
+    PARTIDA("Partida"),
+    DESCONOCIDA("Desconocida")
+}

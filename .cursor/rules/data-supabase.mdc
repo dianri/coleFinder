@@ -34,6 +34,7 @@ Es la **única tabla de lectura** que usa la app. La app no hace `insert`/`updat
 | `tipo_centro_normalizado` | `text` | **Normalizado en BD**: `PRIMARIA`, `SECUNDARIA`, `FP`, `ADULTOS`, `ESPECIAL`, `OTROS` |
 | `titularidad_normalizada` | `text` | **Normalizado en BD**: `PUBLICO`, `CONCERTADO`, `PRIVADO`, `OTRO` |
 | `es_dificil_desempeno` | `boolean` | **Default false**. Indica centros de difícil desempeño para docentes. |
+| `jornada_tipo` | `text` | **Default 'desconocida'**. Puede ser `continua`, `partida`, `desconocida`. |
 
 **Unicidad:** índice `colegios_fuente_fuente_id_key` en `(fuente, fuente_id)`.
 
@@ -65,10 +66,9 @@ nearby_colegios(
   p_tipos         text[]   DEFAULT NULL    -- multiseleccion de tipo de centro
 )
 
--- Campos devueltos
 id, nombre, direccion, localidad, provincia, tipo, latitud, longitud, telefono,
 descripcion_entidad, tipo_centro_normalizado, titularidad_normalizada, 
-distancia_metros, es_dificil_desempeno
+distancia_metros, es_dificil_desempeno, jornada_tipo
 ```
 
 - Los filtros usan `= ANY(array)` en SQL. Si el array es NULL, no se aplica restricción.
@@ -89,6 +89,14 @@ SELECT proname, pg_get_function_arguments(oid) FROM pg_proc
 WHERE pronamespace = 'public'::regnamespace AND proname = 'nearby_colegios';
 ```
 
+### Reglas permanentes para RPCs geográficas
+1. No reescribir desde cero `nearby_colegios` si ya existe una versión funcionando; partir de la actual y aplicar cambios mínimos.
+2. Antes de cerrar cualquier cambio, validar obligatoriamente: esquema real de PostGIS, `search_path` correcto en la función, tipo real de `location` y compatibilidad de tipos en cualquier uso de `<->`, `ST_DWithin`, `ST_Distance...`.
+3. Si `location` es `geography`, cualquier punto de referencia comparable debe acabar en `::geography`.
+4. Después del `CREATE OR REPLACE FUNCTION`, ejecutar siempre un smoke test: `select pg_typeof(location) from public.colegios limit 1;` y una llamada real a la RPC (ej. `select * from public.nearby_colegios(...)`).
+5. No dar por bueno un cambio solo porque compile Kotlin; la RPC debe probarse en BD.
+6. Incluir siempre en la respuesta final la definición completa, la prueba ejecutada y el resultado.
+
 ## Modelo Kotlin
 
 ### `Colegio` (dominio)
@@ -103,7 +111,8 @@ data class Colegio(
     val latitud: Double,
     val longitud: Double,
     val telefono: String?,
-    val esDificilDesempeno: Boolean = false
+    val esDificilDesempeno: Boolean = false,
+    val jornadaTipo: JornadaTipo = JornadaTipo.DESCONOCIDA
 )
 ```
 
@@ -124,6 +133,7 @@ data class NearbyColegioDto(
     @SerialName("tipo_centro_normalizado") val tipoCentroNormalizado: String? = null,
     @SerialName("titularidad_normalizada") val titularidadNormalizada: String? = null,
     @SerialName("es_dificil_desempeno")    val esDificilDesempeno: Boolean = false,
+    @SerialName("jornada_tipo")            val jornadaTipo: String = "desconocida",
     @SerialName("distancia_metros")        val distanciaMetros: Double
 )
 ```

@@ -127,6 +127,7 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import es.colefinder.data.model.Colegio
+import es.colefinder.data.model.JornadaTipo
 import es.colefinder.ui.utils.createNumberedMarkerBitmap
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -546,8 +547,13 @@ fun MapScreen(
                                         headlineContent = { Text(colegio.nombre, fontWeight = FontWeight.Bold) },
                                         supportingContent = {
                                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                val subtitulo = if (colegio.jornadaTipo != JornadaTipo.DESCONOCIDA) {
+                                                    "${colegio.localidad} · $titularidadLabel · Jornada ${colegio.jornadaTipo.label}"
+                                                } else {
+                                                    "${colegio.localidad} · $titularidadLabel"
+                                                }
                                                 Text(
-                                                    text = "${colegio.localidad} · $titularidadLabel",
+                                                    text = subtitulo,
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -858,6 +864,9 @@ fun ColegioDetailCard(
                     InfoChip(label = distText, color = MaterialTheme.colorScheme.primary)
                     if (colegio.localidad.isNotBlank()) {
                         InfoChip(label = colegio.localidad, color = MaterialTheme.colorScheme.secondary)
+                    }
+                    if (colegio.jornadaTipo != JornadaTipo.DESCONOCIDA) {
+                        InfoChip(label = "Jornada ${colegio.jornadaTipo.label}", color = MaterialTheme.colorScheme.tertiary)
                     }
                 }
                 
