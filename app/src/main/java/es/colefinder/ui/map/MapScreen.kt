@@ -516,8 +516,8 @@ fun MapScreen(
                                 val distText = if (item.distanciaMetros >= 1000) "%.1f km".format(item.distanciaMetros / 1000) else "${item.distanciaMetros.toInt()} m"
 
                                 val titularidadLabel = labelParaTitularidad(item.titularidadNormalizada, colegio.tipo)
-                                val esDificil = colegio.esDificilDesempeno
-                                val itemBgColor = if (esDificil) Color(0xFFFFEBEE) else Color.Transparent
+                                val destacado = colegio.esDificilDesempeno || colegio.esRural
+                                val itemBgColor = if (destacado) Color(0xFFFFEBEE) else Color.Transparent
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -528,7 +528,7 @@ fun MapScreen(
                                             viewModel.moverAColegio(LatLng(colegio.latitud, colegio.longitud), item)
                                         }
                                 ) {
-                                    if (esDificil) {
+                                    if (destacado) {
                                         Box(
                                             modifier = Modifier
                                                 .align(Alignment.CenterStart)
@@ -557,19 +557,36 @@ fun MapScreen(
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
-                                                if (esDificil) {
-                                                    Surface(
-                                                        shape = RoundedCornerShape(4.dp),
-                                                        color = Color(0xFFFFCDD2), // Rojo suave para el chip
-                                                        modifier = Modifier.padding(top = 2.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = "Difícil desempeño",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = Color(0xFFB71C1C),
-                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                        )
+                                                if (colegio.esDificilDesempeno || colegio.esRural) {
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
+                                                        if (colegio.esRural) {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = Color(0xFFFFCDD2), // Mismo fondo que Difícil desempeño
+                                                                contentColor = Color(0xFF1B5E20)
+                                                            ) {
+                                                                Text(
+                                                                    text = "Rural",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                        if (colegio.esDificilDesempeno) {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = Color(0xFFFFCDD2),
+                                                                contentColor = Color(0xFFB71C1C)
+                                                            ) {
+                                                                Text(
+                                                                    text = "Difícil desempeño",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                                )
+                                                            }
+                                                        }
                                                     }
                                                 }
                                                 Text(
@@ -870,19 +887,22 @@ fun ColegioDetailCard(
                     }
                 }
                 
-                // Fila 2: Difícil desempeño (Solo si aplica)
-                if (colegio.esDificilDesempeno) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = Color(0xFFFFEBEE),
-                        contentColor = Color(0xFFB71C1C)
+                // Fila 2: Etiquetas extra (Solo si aplica)
+                if (colegio.esDificilDesempeno || colegio.esRural) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "Difícil desempeño",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (colegio.esRural) {
+                            Surface(shape = RoundedCornerShape(50), color = Color(0xFFFFEBEE), contentColor = Color(0xFF1B5E20)) {
+                                Text(text = "Rural", modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        if (colegio.esDificilDesempeno) {
+                            Surface(shape = RoundedCornerShape(50), color = Color(0xFFFFEBEE), contentColor = Color(0xFFB71C1C)) {
+                                Text(text = "Difícil desempeño", modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }

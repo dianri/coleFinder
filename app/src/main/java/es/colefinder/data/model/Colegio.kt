@@ -13,6 +13,7 @@ data class Colegio(
     val localidad: String,
     val telefono: String?,
     val esDificilDesempeno: Boolean = false,
+    val esRural: Boolean = false,
     val jornadaTipo: JornadaTipo = JornadaTipo.DESCONOCIDA
 )
 

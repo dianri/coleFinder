@@ -125,7 +125,7 @@ fun BottomSheetContent(
 - Debe tener `zIndex` superior para cubrir el FAB y el sheet colapsado.
 - **Metadatos en dos filas**:
   - Fila 1: Titularidad, Tipo, Localidad y **Jornada** (solo si no es desconocida), Distancia (chips horizontales).
-  - Fila 2: Chip prominente de "Difícil desempeño" (solo si aplica).
+  - Fila 2: Chips prominentes ("Difícil desempeño" y/o "Rural"). Ambas etiquetas comparten estilo de superficie de fondo contenedor para remarcar el bloque, pero sus colores de texto distintivos permanecen (`Rural` en verde y `Dificil` en rojo).
 
 ### `FiltroChipRow<T>` (privado en `MapScreen.kt`)
 ```kotlin

@@ -21,6 +21,7 @@ data class NearbyColegioDto(
     @SerialName("titularidad_normalizada") val titularidadNormalizada: String? = null,
     @SerialName("es_dificil_desempeno")    val esDificilDesempeno: Boolean = false,
     @SerialName("jornada_tipo")            val jornadaTipo: String = "desconocida",
+    @SerialName("es_rural")                val esRural: Boolean = false,
     @SerialName("distancia_metros")        val distanciaMetros: Double
 ) {
     fun toColegio(): Colegio {
@@ -34,6 +35,7 @@ data class NearbyColegioDto(
             longitud = longitud,
             telefono = telefono,
             esDificilDesempeno = esDificilDesempeno,
+            esRural = esRural,
             jornadaTipo = parseJornadaTipo(jornadaTipo)
         )
     }
