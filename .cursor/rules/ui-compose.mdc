@@ -17,8 +17,10 @@ alwaysApply: true
 - Mantener arquitectura MVVM con flujo unidireccional de estado.
 - No mover lógica al Main Thread si puede ser costosa.
 - Hacer cambios mínimos, coherentes y compilables.
-- **Jerarquía Visual**: Usar `zIndex` para overlays (Detail Card > FAB/Sheet > Mapa).
-- **Layout dinámico**: Medir componentes con `onSizeChanged` para calcular áncoras o márgenes dinámicos si es necesario.
+- **Jerarquía de capas** (zIndex): Detail Card (2) > FAB (1) > MapSheet (1) > Mapa (0). El hint de long press usa zIndex 3 y el aviso de centros lejanos zIndex 4.
+- **Layout dinámico**: Los anchors del sheet se recalculan en un `SideEffect` usando alturas medidas con `onSizeChanged` (`headerHeight`, `filtersHeight`, `searchBarHeight`, `navBarPx`).
+
+---
 
 ## Sistema de filtros
 
@@ -41,22 +43,26 @@ Lógica implementada en `CentroFiltros.kt`: `toggleTitularidad(...)` y `toggleTi
 El ViewModel expone `toggleFiltroTitularidad(filtro)` y `toggleFiltroTipoCentro(filtro)` — **recargan la RPC** vía `reloadWithCurrentFilters()`.
 
 ### Lógica de filtrado (servidor + fallback cliente)
-El ViewModel envía filtros a la RPC como arrays (`p_titularidades`, `p_tipos`). Si el set es TODOS o vacío, no se incluye el parámetro.
+El `SupabaseColegioRepository` envía filtros a la RPC como arrays (`p_titularidades`, `p_tipos`). Si el set es TODOS o vacío, no se incluye el parámetro.
 El getter `MapState.colegiosConDistancia` aplica ambos grupos en cliente como **fallback de coherencia visual**:
 - Usa `titularidadNormalizada` (campo de BD) como fuente preferente; fallback a `tipo` (texto libre).
 - Usa `tipoCentroClasificado: TipoCentroClasificado` (derivado de BD + fallback cliente).
 - Un centro pasa si cumple **ambos** grupos simultáneamente.
 
+---
+
 ## Clasificación de tipo de centro (`CentroFiltros.kt`)
 
 ### Prioridad de clasificación
 1. `tipo_centro_normalizado` de BD (campo `NearbyColegioDto.tipoCentroNormalizado`).
-2. `descripcion_entidad` — si tiene contenido significativo (no email, no vacío).
+2. `descripcion_entidad` — si tiene contenido significativo (no email, no vacío, >= 10 chars).
 3. Siglas al inicio del nombre: CEIP, IES, CIFP, CRA, CEPA, CEE…
 4. Si hay duda → `OTROS`.
 
-### Enum `TipoCentroClasificado`
+### Enum `TipoCentroClasificado` (en `CentroFiltros.kt`)
 `PRIMARIA`, `SECUNDARIA`, `FP`, `ADULTOS`, `ESPECIAL`, `OTROS`
+
+Extension property `TipoCentroClasificado.label: String` devuelve la etiqueta legible para la UI.
 
 ### Función principal
 ```kotlin
@@ -67,6 +73,8 @@ fun clasificarTipoCentro(
     tipoCentroNormalizado: String? = null   // preferente si viene de BD
 ): TipoCentroClasificado
 ```
+
+---
 
 ## Colores — fuente única de verdad (`CentroFiltros.kt`)
 
@@ -84,56 +92,60 @@ Todos los colores de marcadores, badges y chips se resuelven desde las constante
 | Especial | `ColorChipEspecial` | Naranja quemado `#BF360C` |
 | Otros | `ColorChipOtros` | Gris `#757575` |
 | Todos (neutro) | `ColorFiltroTodos` | Blue-grey `#546E7A` |
-| Destacado (Fondo Tarjeta) | `colorFondoDestacado()` | `@Composable` (Theme-aware Rojo Suave / Oscuro Sutil) |
-| Destacado (Fondo Chip) | `colorFondoChipDestacado()` | `@Composable` (Theme-aware contraste) |
-| Rural (Texto)| `colorTextoRural()` | `@Composable` (Theme-aware Verde) |
-| Difícil Desempeño (Texto)| `colorTextoDificil()` | `@Composable` (Theme-aware Rojo) |
+| Fondo destacado (lista) | `colorFondoDestacado()` | `@Composable` theme-aware (rojo suave / oscuro sutil) |
+| Fondo chip destacado | `colorFondoChipDestacado()` | `@Composable` theme-aware |
+| Rural (texto) | `colorTextoRural()` | `@Composable` theme-aware verde |
+| Difícil desempeño (texto) | `colorTextoDificil()` | `@Composable` theme-aware rojo |
 
 ### Funciones de color
 ```kotlin
-// Para marcadores y badges — usa titularidadNormalizada de BD con fallback a tipo libre
 fun colorParaTitularidad(tipo: String, titularidadNormalizada: String? = null): Color
-
-// Para chips de filtro
 fun colorParaTitularidadFiltro(filtro: TitularidadFiltro): Color
 fun colorParaTipoCentroFiltro(filtro: TipoCentroFiltro): Color
+fun colorParaTipoCentroClasificado(tipo: TipoCentroClasificado): Color
 
-// Para elementos visuales destacados (Rural / Difícil Desempeño)
 @Composable fun colorFondoDestacado(): Color
 @Composable fun colorFondoChipDestacado(): Color
 @Composable fun colorTextoRural(): Color
 @Composable fun colorTextoDificil(): Color
 ```
 
-## Componentes Compose clave
-
-### `BottomSheetContent`
+### Funciones de etiqueta
 ```kotlin
-@Composable
-fun BottomSheetContent(
-    state: MapState,
-    onFiltroTitularidadChange: (TitularidadFiltro) -> Unit,
-    onFiltroTipoCentroChange: (TipoCentroFiltro) -> Unit,
-    onColegioClick: (Colegio) -> Unit
-)
+fun labelParaTitularidad(titularidadNormalizada: String?, tipoRaw: String): String
+val TipoCentroClasificado.label: String   // extension property
 ```
-### `MapSheet` (Bottom Sheet Custom)
-- Usa `AnchoredDraggableState` en lugar de `BottomSheetScaffold` para control total.
-- Áncoras: `Collapsed` (solo header), `Intermediate` (header + filtros), `Expanded` (lista completa).
-- El estado `Expanded` debe respetar la altura de la `SearchBar` dinámicamente.
-- **Nested Scroll**: Implementar `NestedScrollConnection` con comprobación de offset real (`currentOffset > expandedOffset`) para asegurar inercia simétrica en la lista interna.
 
-### `FloatingActionButton` (Ubicación)
-- Mantener siempre visible (pero con `zIndex` inferior a la tarjeta de detalle).
-- Plugin de permisos con "acción pendiente": si se pulsa sin permiso, pedirlo y ejecutar la acción automáticamente al concederlo.
-- Fallback de ubicación: `lastLocation` -> `getCurrentLocation` (alta precisión) -> Toast de error.
+---
 
-### `Detail Card` y Overlays
-- `ColegioDetailCard` debe aparecer desde abajo (`slideInVertically`).
-- Debe tener `zIndex` superior para cubrir el FAB y el sheet colapsado.
-- **Metadatos en dos filas**:
-  - Fila 1: Titularidad, Tipo, Localidad y **Jornada** (solo si no es desconocida), Distancia (chips horizontales).
-  - Fila 2: Chips prominentes ("Difícil desempeño" y/o "Rural"). Ambas etiquetas comparten estilo de superficie de fondo contenedor para remarcar el bloque, pero sus colores de texto distintivos permanecen (`Rural` en verde y `Dificil` en rojo).
+## Componentes Compose implementados
+
+### `MapScreen` (composable principal)
+Gestiona toda la UI del mapa en una sola composable. Incluye:
+- Estado de permisos de ubicación con `rememberMultiplePermissionsState`.
+- Lambda local `focusOnCurrentLocationAndLoadNearby` (NO en el ViewModel):
+  usa `FusedLocationProviderClient.lastLocation` con fallback a `getCurrentLocation(HIGH_ACCURACY)`.
+- `AnchoredDraggableState<MapSheetValue>` con anchors dinámicos calculados en `SideEffect`.
+- `NestedScrollConnection` custom para coordinar scroll de lista interna y arrastre del sheet.
+- `LaunchedEffect` para: arranque/permisos, hint, movimiento de cámara, auto-encuadre, aviso lejanos.
+
+### `MapSheetValue` (enum en `MapScreen.kt`)
+```kotlin
+enum class MapSheetValue { Collapsed, Intermediate, Expanded }
+```
+- **Collapsed**: solo la cabecera/handle visible por encima de la nav bar.
+- **Intermediate**: cabecera + sección de filtros visible.
+- **Expanded**: lista desplegada hasta justo debajo de la SearchBar.
+
+### Sheet persistente (`Surface` con `AnchoredDraggable`)
+Implementado directamente dentro de `MapScreen` como `Surface` con `offset { IntOffset(0, y) }`.
+- Capa 2 del stack (zIndex 1).
+- Tres secciones en `Column`: cabecera clicable, filtros (`onSizeChanged`), lista con `LazyColumn`.
+- Cada ítem de la lista muestra:
+  - Badge numerado con color de titularidad.
+  - Nombre + subtítulo (localidad · titularidad · jornada si no es DESCONOCIDA).
+  - Chips inline "Rural" y/o "Difícil desempeño" si aplica.
+  - Fondo destacado + barra lateral roja si `esDificilDesempeno || esRural`.
 
 ### `FiltroChipRow<T>` (privado en `MapScreen.kt`)
 ```kotlin
@@ -141,16 +153,83 @@ fun BottomSheetContent(
 private fun <T> FiltroChipRow(
     titulo: String,
     opciones: List<T>,
-    seleccionados: Set<T>,         // multiselección
+    seleccionados: Set<T>,
     etiqueta: (T) -> String,
     colorChip: (T) -> Color,
     onSeleccionar: (T) -> Unit
 )
 ```
 
+### `FloatingActionButton` (Ubicación)
+- Posicionado dinámicamente con `graphicsLayer { translationY = fabOffset - 80.dp.toPx() }`
+  para seguir al sheet (siempre visible por encima del tope del sheet).
+- **Patrón de acción pendiente**: `pendingLocationRequest: Boolean` (local state en `MapScreen`).
+  Si se pulsa sin permiso → `launchMultiplePermissionRequest()` y `pendingLocationRequest = true`.
+  Cuando el permiso se concede → `LaunchedEffect(allPermissionsGranted)` ejecuta la acción.
+- Fallback de ubicación: `lastLocation` → `getCurrentLocation` (alta precisión) → Toast de error.
+
+### Hint de long press
+- Se muestra como `Surface` animado con `AnimatedVisibility` (zIndex 3).
+- Posicionado justo encima del tope del sheet con `graphicsLayer`.
+- Se oculta automáticamente tras 4 segundos (`LaunchedEffect`).
+- Persiste el descubrimiento en DataStore via `UserPreferencesRepository`.
+
+### Aviso de centros lejanos
+- `state.showRemoteResultsWarning` activa un `Surface` animado (zIndex 4, debajo del buscador).
+- Se auto-descarta tras 6 segundos con `LaunchedEffect`.
+
 ### Marcadores en el mapa
 - Color resuelto con `colorParaTitularidad(colegio.tipo, colegioConDist.titularidadNormalizada)`.
 - Numerados con `createNumberedMarkerBitmap(context, numberLabel, markerColor)`.
 - Usan `key(colegio.id)` para composición estable.
 
+### `ColegioDetailCard` (implementado)
+Aparece como overlay en `Alignment.BottomCenter` con `zIndex(2f)` y `padding(bottom = 80.dp)`.
+Estructura actual:
+- **Cabecera**: nombre (máx. 2 líneas) + botón favorito + botón cerrar.
+- **Chips informativos** (fila horizontal scrollable, no interactivos):
+  titularidad (`InfoChip`), tipo de centro (`InfoChip`), distancia (`InfoChip`).
+- **Dirección**: icono + dirección en dos líneas (dirección y localidad).
+- **Teléfono**: icono + número (solo si `telefono != null`).
+- **Acciones**:
+  - Fila 1: "Navegar" (`Button` relleno, ancho completo).
+  - Fila 2: si hay teléfono → "Llamar" + "Detalle" (mitades); si no → "Detalle" (ancho completo).
+  - "Navegar" → `google.navigation:q=lat,lon` (Google Maps routing).
+  - "Llamar" → `ACTION_DIAL tel:número`.
+  - "Detalle" → `geo:0,0?q=nombre,dirección,municipio` (búsqueda de POI en Google Maps).
 
+### `InfoChip` (privado en `MapScreen.kt`)
+Chip no interactivo con fondo `color.copy(alpha = 0.15f)` y texto coloreado.
+```kotlin
+@Composable
+private fun InfoChip(label: String, color: Color)
+```
+
+### Favoritos (`MapState.favoritosIds`)
+Toggle in-memory con `viewModel.toggleFavorito(colegioId)`.
+El icono corazón en `ColegioDetailCard` refleja `colegioId in state.favoritosIds`.
+**No persiste entre sesiones** — la persistencia con Room es roadmap.
+
+---
+
+## Planned / Backlog (no implementado aún)
+
+> Estas funcionalidades están descritas en las reglas como objetivo futuro.
+> **No asumas que existen en el código hasta que se implemente.**
+
+### `ColegioDetailCard` — chips de metadatos adicionales
+Los campos `esDificilDesempeno`, `esRural` y `jornadaTipo` ya llegan en el modelo `Colegio`
+y **se muestran en la lista del sheet**, pero **aún no aparecen en la card de detalle**.
+
+Diseño planificado para la card:
+- Fila 2 de chips: "Difícil desempeño" (rojo, `colorTextoDificil`) y/o "Rural" (verde, `colorTextoRural`),
+  solo si aplican, con fondo `colorFondoChipDestacado`.
+- Chip de jornada en fila 1 (junto a titularidad/tipo/distancia), solo si `jornadaTipo != DESCONOCIDA`.
+
+### Favoritos persistentes
+Guardar `favoritosIds` en Room cuando se implemente la capa de persistencia local.
+La interfaz `ColegioRepository` está diseñada para absorber esta extensión.
+
+### Pantalla de detalle del centro
+El botón "Detalle" en `ColegioDetailCard` actualmente abre Google Maps con búsqueda por nombre.
+Cuando exista una pantalla de detalle nativa, debe remplazar ese intent.

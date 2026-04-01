@@ -20,69 +20,169 @@ alwaysApply: true
 - Mantener arquitectura MVVM con flujo unidireccional de estado.
 - Toda lógica de datos debe integrarse en `MapState`.
 - El ViewModel principal es `MapViewModel`.
-- Sin escrituras directas a Supabase desde composables: toda escritura pasa por ViewModel; `colegios` es solo lectura (detalle en `data-supabase.mdc`).
+- Sin escrituras directas a Supabase desde composables ni desde el ViewModel:
+  toda operación de red pasa por `ColegioRepository` (inyectado en el ViewModel).
+- Evitar refactors grandes si no son necesarios para la tarea.
+- Hacer cambios mínimos, coherentes y compilables.
 
+---
+
+## Capas de la arquitectura
+
+```
+MapScreen (Compose)
+    └── MapViewModel (HiltViewModel)
+            ├── ColegioRepository (interfaz)
+            │       └── SupabaseColegioRepository (implementación, @Singleton)
+            │               └── SupabaseClient (Hilt → NetworkModule)
+            └── UserPreferencesRepository (@Singleton, DataStore)
+```
+
+### `ColegioRepository` (interfaz en `data/repository/`)
+Contrato de acceso a datos de centros educativos. Permite sustituir la
+implementación de Supabase por una de Room (modo offline) sin tocar el ViewModel.
+
+```kotlin
+interface ColegioRepository {
+    suspend fun fetchNearbyColegios(
+        lat: Double,
+        lon: Double,
+        limit: Int = 50,
+        titularidades: Set<TitularidadFiltro> = setOf(TitularidadFiltro.TODOS),
+        tipos: Set<TipoCentroFiltro> = setOf(TipoCentroFiltro.TODOS)
+    ): Result<List<ColegioConDistancia>>
+}
+```
+
+### `SupabaseColegioRepository` (`data/repository/`)
+Implementación concreta de `ColegioRepository`:
+- Ejecuta en `Dispatchers.IO`.
+- Construye los parámetros JSON con `buildJsonObject` y envía `p_titularidades` / `p_tipos`
+  como `JsonArray` solo si hay filtros concretos (null = sin restricción en BD).
+- Llama a `supabase.postgrest.rpc("nearby_colegios", params) { schema = BuildConfig.SUPABASE_SCHEMA }`.
+- Aplica `.distinctBy { it.id }` antes de mapear DTO → dominio.
+- Devuelve `Result<List<ColegioConDistancia>>` (nunca lanza directamente).
+- Registrada en Hilt via `RepositoryModule` (`@Binds`).
+
+### `UserPreferencesRepository` (`data/repository/`)
+Persiste preferencias de UI mediante DataStore Preferences:
+- `hasDiscoveredLongPress: Boolean` — si el usuario ya ha hecho long press en el mapa.
+- `longPressHintCount: Int` — número de veces que se ha mostrado el hint.
+- Métodos: `updateHasDiscoveredLongPress(Boolean)`, `incrementHintCount()`.
+- Expone `userPreferencesFlow: Flow<UserPreferences>` al ViewModel.
+
+---
 
 ## Estado y flujo
 
-### `MapState`
+### `MapState` — esquema real actual
+
 ```kotlin
 data class MapState(
-    val isLoading: Boolean,
-    val colegiosCercanos: List<ColegioConDistancia>,   // resultado bruto de la RPC
-    val suggestions: List<SearchSuggestion>,
-    val error: String?,
-    val userLocation: LatLng?,
-    val puntoReferencia: LatLng?,
-    val selectedColegio: Colegio?,
-    val selectedColegioConDistancia: ColegioConDistancia?, // Selección detallada
-    val filtrosTitularidad: Set<TitularidadFiltro>,
-    val filtrosTipoCentro: Set<TipoCentroFiltro>,
-    val cameraPosition: CameraPositionState,
-    val showLongPressHint: Boolean = false                 // Hint de descubrimiento
+    val isLoading: Boolean = false,
+    val colegiosCercanos: List<ColegioConDistancia> = emptyList(),   // resultado bruto de la RPC
+    val suggestions: List<SearchSuggestion> = emptyList(),
+    val error: String? = null,
+    val userLocation: LatLng? = null,
+    val puntoReferencia: LatLng? = null,
+    val selectedColegioConDistancia: ColegioConDistancia? = null,    // Selección completa para la card
+    val filtrosTitularidad: Set<TitularidadFiltro> = setOf(TitularidadFiltro.TODOS),
+    val filtrosTipoCentro: Set<TipoCentroFiltro> = setOf(TipoCentroFiltro.TODOS),
+    val favoritosIds: Set<Int> = emptySet(),                         // Favoritos in-memory (Room es roadmap)
+    val cameraPosition: CameraPositionState = ...,
+    val showLongPressHint: Boolean = false,
+    val hasDiscoveredLongPress: Boolean = false,                      // Sincronizado desde DataStore
+    val longPressHintCount: Int = 0,                                  // Sincronizado desde DataStore
+    val focusedRequestType: FocusedRequestType = FocusedRequestType.NONE,
+    val showRemoteResultsWarning: Boolean = false
 ) {
-    val colegiosConDistancia: List<ColegioConDistancia>  // getter: aplica ambos filtros en cliente
-}
+    // Computed — NO es un campo del constructor:
+    val selectedColegio: Colegio? get() = selectedColegioConDistancia?.colegio
 
+    // Getter que aplica ambos filtros en cliente (fallback de coherencia visual):
+    val colegiosConDistancia: List<ColegioConDistancia>
+        get() = colegiosCercanos.filter { ... }
+}
+```
+
+### `FocusedRequestType` (enum en `MapState.kt`)
+```kotlin
+enum class FocusedRequestType { NONE, MY_LOCATION, POINT, SEARCH }
+```
+Controla si la cámara debe auto-ajustar el encuadre tras una carga.
+El ViewModel lo activa en `initializeMap`, `updateUserLocation`, `onMapLongClick` y `selectSuggestion`.
+La UI lo consume en un `LaunchedEffect` y llama a `viewModel.consumeFocusedRequest()` al terminar.
+
+### `ColegioConDistancia`
+```kotlin
 data class ColegioConDistancia(
     val colegio: Colegio,
     val distanciaMetros: Double,
     val tipoCentroClasificado: TipoCentroClasificado,  // derivado de BD + fallback cliente
-    val titularidadNormalizada: String?                 // campo normalizado de BD (PUBLICO/CONCERTADO/PRIVADO)
+    val titularidadNormalizada: String?                 // PUBLICO / CONCERTADO / PRIVADO / null
 )
 ```
 
-### `MapViewModel` — responsabilidades
-- `initializeMap(userLatLng: LatLng?)`: carga inicial única (flag `initialized`); usa ubicación del usuario o Madrid por defecto.
-- `loadNearbyColegios(lat, lon)`: llama a la RPC `nearby_colegios` pasando los filtros activos como arrays (`p_titularidades`, `p_tipos`). Si el filtro es TODOS o vacío, el parámetro no se envía (null = sin restricción en BD).
-- Geocoder con debounce de 300 ms (`onSearchQueryChanged`).
-- `toggleFiltroTitularidad` / `toggleFiltroTipoCentro`: actualizan sets de filtros **y recargan la RPC** llamando a `reloadWithCurrentFilters()`.
-- `onMapClick` / `onMapMoved`: disparan el hint de descubrimiento si aplica.
-- `onMapLongClick`: realiza búsqueda en punto y marca descubrimiento.
-- `focusOnCurrentLocationAndLoadNearby`: flujo unificado de permisos + centrado + carga (maneja fallbacks y acciones pendientes).
-- `moverAColegio`: solo cámara + selección, nunca recarga datos.
+---
 
-### Flujo de filtros (servidor + cliente)
-La RPC acepta `p_titularidades text[]` y `p_tipos text[]` (arrays opcionales).
-Cuando hay opciones concretas seleccionadas, `MapViewModel` construye el array con `Set<TitularidadFiltro>.toRpcArray()` / `Set<TipoCentroFiltro>.toRpcArray()` y lo envía como `JsonArray`.
-El getter `colegiosConDistancia` en `MapState` aplica ambos filtros en memoria como **fallback de UI** para garantizar coherencia visual.
-Cambiar un filtro **sí** provoca una nueva llamada a Supabase (vía `reloadWithCurrentFilters()`).
+## `MapViewModel` — responsabilidades reales
+
+- `initializeMap(userLatLng: LatLng?)`: carga inicial única (flag `initialized`);
+  usa ubicación del usuario o Madrid por defecto.
+- `loadNearbyColegios(lat, lon)`: delega en `colegioRepository.fetchNearbyColegios(...)`.
+  Pasa los filtros activos del estado actual. Actualiza `colegiosCercanos`.
+- `reloadWithCurrentFilters()`: recarga la RPC con el punto de referencia actual
+  (usa `puntoReferencia` o `userLocation` o Madrid por defecto).
+- `toggleFiltroTitularidad(filtro)` / `toggleFiltroTipoCentro(filtro)`:
+  actualizan sets de filtros **y recargan** vía `reloadWithCurrentFilters()`.
+- `onSearchQueryChanged(query, context)`: Geocoder con debounce de 300 ms.
+- `selectSuggestion(suggestion)`: centra la cámara y recarga centros.
+- `updateUserLocation(latLng)`: centra la cámara en la ubicación del usuario y recarga.
+- `onMapLongClick(latLng)`: marca `puntoReferencia`, recarga centros, persiste descubrimiento.
+- `onMapClick()`: limpia selección; muestra hint si el usuario aún no ha descubierto el long press.
+- `onMapMoved()`: muestra hint si el usuario aún no ha descubierto el long press.
+- `onHintDismissed()`: limpia `showLongPressHint`.
+- `onColegioClick(ColegioConDistancia)`: actualiza `selectedColegioConDistancia` y anima cámara.
+- `moverAColegio(latLng, ColegioConDistancia)`: solo cámara + selección, nunca recarga datos.
+- `clearSelectedColegio()`: limpia `selectedColegioConDistancia`.
+- `toggleFavorito(colegioId)`: alterna el id en `favoritosIds` (in-memory).
+- `setMostrarAvisoCentrosLejanos(Boolean)`: activa/desactiva el aviso de centros lejanos.
+- `consumeFocusedRequest()`: resetea `focusedRequestType` a NONE tras consumir el auto-encuadre.
+- `buscarDireccion(query, context)`: busca con Geocoder, centra cámara y recarga centros.
+
+> **Nota sobre `focusOnCurrentLocationAndLoadNearby`**: esta función existe como
+> lambda local dentro de `MapScreen` (no en el ViewModel). Usa `FusedLocationProviderClient`
+> con fallback de `lastLocation` → `getCurrentLocation(PRIORITY_HIGH_ACCURACY)`.
+> El ViewModel no tiene acceso directo al `FusedLocationProviderClient`.
+
+---
 
 ## Archivos clave del dominio de mapa
 
 | Archivo | Rol |
 |---|---|
-| `MapState.kt` | Estado UI + getter de filtrado |
-| `MapViewModel.kt` | Lógica de negocio, fetch RPC, geocoder |
-| `MapScreen.kt` | UI Compose principal |
-| `CentroFiltros.kt` | Enums de filtros, clasificación de tipo, colores, toggle logic |
+| `MapState.kt` | Estado UI + getter de filtrado + enums `FocusedRequestType` |
+| `MapViewModel.kt` | Lógica de negocio, delegación a repositorios |
+| `MapScreen.kt` | UI Compose principal + `MapSheetValue` enum + sheet custom |
+| `CentroFiltros.kt` | Enums de filtros, clasificación de tipo, colores, toggle logic, arrays RPC |
 | `NearbyColegioDto.kt` | DTO de deserialización de la RPC |
-| `Colegio.kt` | Modelo de dominio |
+| `Colegio.kt` | Modelo de dominio + `JornadaTipo` enum |
+| `ColegioRepository.kt` | Interfaz de acceso a datos |
+| `SupabaseColegioRepository.kt` | Implementación Supabase de `ColegioRepository` |
+| `UserPreferencesRepository.kt` | Persistencia de preferencias con DataStore |
+| `NetworkModule.kt` / `RepositoryModule.kt` | Módulos Hilt (en `di/`) |
 
-## Deduplicación obligatoria en State
+---
 
 ## Deduplicación obligatoria
 - Antes de actualizar el estado con listas de colegios, aplicar siempre:
   - `.distinctBy { it.id }`
+- Este `.distinctBy` ocurre en `SupabaseColegioRepository`, no en el ViewModel.
 
-
+## Flujo de filtros (servidor + cliente)
+La RPC acepta `p_titularidades text[]` y `p_tipos text[]` (arrays opcionales).
+Cuando hay opciones concretas seleccionadas, `SupabaseColegioRepository` construye
+el array con `Set<TitularidadFiltro>.toRpcArray()` (en `CentroFiltros.kt`).
+El getter `colegiosConDistancia` en `MapState` aplica ambos filtros en memoria
+como **fallback de UI** para garantizar coherencia visual.
+Cambiar un filtro **sí** provoca una nueva llamada a Supabase (vía `reloadWithCurrentFilters()`).
