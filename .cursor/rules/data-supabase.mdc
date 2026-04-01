@@ -10,7 +10,26 @@ alwaysApply: true
 - Cliente centralizado: `SupabaseClient`.
 - Configuración de red: `NetworkModule`.
 
-## Tabla principal: `public.colegios`
+## Arquitectura PRE/PROD (Separación de Esquemas)
+
+El proyecto utiliza un aislamiento basado en esquemas de Postgres dentro de la misma base de datos.
+
+- **PRE (Staging)**: Esquema `staging`.
+- **PROD (Production)**: Esquema `public`.
+
+### Reglas de Desarrollo
+1. **Validación primero**: Cualquier cambio en datos (`colegios`) o funciones (`nearby_colegios`) debe implementarse y validarse primero en el esquema `staging` usando el flavor Android `pre`.
+2. **Promoción Controlada**: No editar `public` a mano. La promoción se realiza mediante scripts SQL (`supabase/scripts/promote_*`).
+3. **RPCs Multi-Esquema**: Al invocar funciones RPC desde Android, se debe especificar el esquema en el bloque `rpc(...) { schema = ... }`. Las llamadas en PRE **obligan** al envío de la cabecera `Content-Profile: staging`.
+
+## Seguridad
+
+### Gestión de Secretos
+1. **Archivo `secrets.properties`**: NUNCA se versiona ni se incluye en commits. Git debe ignorarlo siempre.
+2. **Archivo `secrets.defaults.properties`**: Solo contiene placeholders.
+3. **RLS (Row Level Security)**: Debe estar habilitado tanto en `public` como en `staging`. El rol `anon` solo tiene permisos de `SELECT` y `EXECUTE` controlados.
+
+## Tabla principal: `public.colegios` / `staging.colegios`
 
 Es la **única tabla de lectura** que usa la app. La app no hace `insert`/`update`/`delete` sobre ella; los datos se poblan desde jobs/scripts en servidor.
 
@@ -51,7 +70,7 @@ Los campos `tipo_centro_normalizado` y `titularidad_normalizada` se poblaron des
 | `comunidad_madrid` | `centros_educativos_import_comunidad_madrid` | `centro_codigo` | `centro_tipo_desc_abreviada` | `centro_titularidad` |
 | `datos.madrid.es` | `colegios_import_madrid` | `"PK"` | `"TIPO"` (URL path) | inferido del `"TIPO"` |
 
-Si se añaden nuevas fuentes o se reimportan datos, aplicar los mismos UPDATEs con `UPDATE public.colegios SET ... FROM <tabla_import> WHERE fuente='...' AND fuente_id = <key>`.
+Si se añaden nuevas fuentes o se reimportan datos, aplicar los mismos UPDATEs con `UPDATE [<schema>].colegios SET ... FROM <tabla_import> WHERE fuente='...' AND fuente_id = <key>`.
 
 ## RPC: `nearby_colegios`
 
@@ -75,26 +94,24 @@ distancia_metros, es_dificil_desempeno, jornada_tipo, es_rural
 - Los filtros usan `= ANY(array)` en SQL. Si el array es NULL, no se aplica restricción.
 - Orden por cercanía usando operador espacial `<->` (KNN sobre índice GIST `idx_colegios_location`).
 - La app siempre llama con `p_limit = 50`.
-- Se invoca mediante `supabase.postgrest.rpc("nearby_colegios", params).decodeList<NearbyColegioDto>()`.
+- Se invoca mediante `supabase.postgrest.rpc("nearby_colegios", params) { schema = BuildConfig.SUPABASE_SCHEMA }.decodeList<NearbyColegioDto>()`.
 - Los arrays se construyen en Kotlin con `Set<TitularidadFiltro>.toRpcArray()` (en `CentroFiltros.kt`) y se envían con `putJsonArray("p_titularidades") { ... }`.
 - Si el set de filtros contiene `TODOS` o está vacío, el parámetro no se incluye (null en BD).
 
-### Regla crítica: No dejar versiones obsoletas de la RPC
-Si se modifica la firma, siempre ejecutar primero:
+### Regla crítica: Promoción y Coexistencia
+1. Si se modifica la firma, primero aplicar en `staging`.
+2. Al promocionar a `public`, asegurar que se actualizan los permisos (`GRANT EXECUTE ON FUNCTION public.nearby_colegios TO anon`).
+3. Verificar después que solo existe una función por schema:
 ```sql
-DROP FUNCTION IF EXISTS public.nearby_colegios(... firma anterior ...);
-```
-Y verificar después que solo existe una función:
-```sql
-SELECT proname, pg_get_function_arguments(oid) FROM pg_proc
-WHERE pronamespace = 'public'::regnamespace AND proname = 'nearby_colegios';
+SELECT pronamespace::regnamespace as schema, proname, pg_get_function_arguments(oid) FROM pg_proc
+WHERE proname = 'nearby_colegios';
 ```
 
 ### Reglas permanentes para RPCs geográficas
 1. No reescribir desde cero `nearby_colegios` si ya existe una versión funcionando; partir de la actual y aplicar cambios mínimos.
 2. Antes de cerrar cualquier cambio, validar obligatoriamente: esquema real de PostGIS, `search_path` correcto en la función, tipo real de `location` y compatibilidad de tipos en cualquier uso de `<->`, `ST_DWithin`, `ST_Distance...`.
 3. Si `location` es `geography`, cualquier punto de referencia comparable debe acabar en `::geography`.
-4. Después del `CREATE OR REPLACE FUNCTION`, ejecutar siempre un smoke test: `select pg_typeof(location) from public.colegios limit 1;` y una llamada real a la RPC (ej. `select * from public.nearby_colegios(...)`).
+4. Después del `CREATE OR REPLACE FUNCTION`, ejecutar siempre un smoke test: `select pg_typeof(location) from [schema].colegios limit 1;` y una llamada real a la RPC (ej. `select * from [schema].nearby_colegios(...)`).
 5. No dar por bueno un cambio solo porque compile Kotlin; la RPC debe probarse en BD.
 6. Incluir siempre en la respuesta final la definición completa, la prueba ejecutada y el resultado.
 

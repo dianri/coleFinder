@@ -3,6 +3,10 @@ package es.colefinder.data
 import es.colefinder.BuildConfig
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
+import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.plugins.logging.LogLevel
+import io.ktor.client.plugins.logging.Logger
+import io.ktor.client.plugins.logging.DEFAULT
 
 /**
  * Singleton del cliente Supabase.
@@ -17,6 +21,11 @@ object Supabase {
         supabaseUrl = BuildConfig.SUPABASE_URL,
         supabaseKey = BuildConfig.SUPABASE_ANON_KEY
     ) {
-        install(Postgrest)
+        if (BuildConfig.DEBUG) {
+            defaultLogLevel = io.github.jan.supabase.logging.LogLevel.DEBUG
+        }
+        install(Postgrest) {
+            defaultSchema = BuildConfig.SUPABASE_SCHEMA
+        }
     }
 }

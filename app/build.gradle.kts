@@ -1,3 +1,14 @@
+import java.util.Properties
+
+val secretsProps = Properties().apply {
+    val defaultsFile = rootProject.file("secrets.defaults.properties")
+    if (defaultsFile.exists()) load(defaultsFile.inputStream())
+    val secretsFile = rootProject.file("secrets.properties")
+    if (secretsFile.exists()) load(secretsFile.inputStream())
+}
+
+fun getSecret(key: String): String = secretsProps.getProperty(key, "")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -20,6 +31,25 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    flavorDimensions += "env"
+    productFlavors {
+        create("pre") {
+            dimension = "env"
+            applicationIdSuffix = ".pre"
+            versionNameSuffix = "-pre"
+            resValue("string", "app_name", "ColeFinder PRE")
+            buildConfigField("String", "SUPABASE_URL", "\"${getSecret("SUPABASE_URL_PRE")}\"")
+            buildConfigField("String", "SUPABASE_ANON_KEY", "\"${getSecret("SUPABASE_ANON_KEY_PRE")}\"")
+            buildConfigField("String", "SUPABASE_SCHEMA", "\"staging\"")
+        }
+        create("prod") {
+            dimension = "env"
+            buildConfigField("String", "SUPABASE_URL", "\"${getSecret("SUPABASE_URL_PROD")}\"")
+            buildConfigField("String", "SUPABASE_ANON_KEY", "\"${getSecret("SUPABASE_ANON_KEY_PROD")}\"")
+            buildConfigField("String", "SUPABASE_SCHEMA", "\"public\"")
+        }
     }
 
     buildTypes {
@@ -51,7 +81,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
-    implementation("androidx.compose.foundation:foundation")
+    implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
@@ -60,6 +90,7 @@ dependencies {
     // Supabase
     implementation(libs.supabase.postgrest)
     implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.logging)
     implementation(libs.kotlinx.serialization.json)
 
     // Hilt
@@ -75,6 +106,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit)
+    testImplementation(libs.ktor.client.mock)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

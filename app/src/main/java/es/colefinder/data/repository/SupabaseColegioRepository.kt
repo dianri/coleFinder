@@ -1,6 +1,7 @@
 package es.colefinder.data.repository
 
 import android.util.Log
+import es.colefinder.BuildConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
@@ -59,9 +60,16 @@ class SupabaseColegioRepository @Inject constructor(
                 }
             }
 
-            val dtos = supabase.postgrest
-                .rpc("nearby_colegios", params)
-                .decodeList<NearbyColegioDto>()
+            val dtos: List<NearbyColegioDto> = try {
+                supabase.postgrest
+                    .rpc("nearby_colegios", params) {
+                        schema = BuildConfig.SUPABASE_SCHEMA
+                    }
+                    .decodeList<NearbyColegioDto>()
+            } catch (e: io.github.jan.supabase.exceptions.RestException) {
+                Log.e(TAG, "fetchNearbyColegios: error de PostgREST [${e.message}]: ${e.description}", e)
+                throw e
+            }
 
             val resultado = dtos
                 .distinctBy { it.id }
