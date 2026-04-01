@@ -1,7 +1,7 @@
 [versions]
 agp = "8.13.2"
 ktorClientLogging = "3.0.1"
-ktorClientMock = "3.4.2"
+ktorClientMock = "3.0.1"
 secrets = "2.0.1"
 kotlin = "2.0.21"
 coreKtx = "1.17.0"
