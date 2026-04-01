@@ -84,8 +84,10 @@ Todos los colores de marcadores, badges y chips se resuelven desde las constante
 | Especial | `ColorChipEspecial` | Naranja quemado `#BF360C` |
 | Otros | `ColorChipOtros` | Gris `#757575` |
 | Todos (neutro) | `ColorFiltroTodos` | Blue-grey `#546E7A` |
-| Difícil Desempeño (Fondo) | - | `#FFFFEBEE` (Rojo muy suave) |
-| Difícil Desempeño (Texto)| - | `#B71C1C` (Rojo oscuro elegante) |
+| Destacado (Fondo Tarjeta) | `colorFondoDestacado()` | `@Composable` (Theme-aware Rojo Suave / Oscuro Sutil) |
+| Destacado (Fondo Chip) | `colorFondoChipDestacado()` | `@Composable` (Theme-aware contraste) |
+| Rural (Texto)| `colorTextoRural()` | `@Composable` (Theme-aware Verde) |
+| Difícil Desempeño (Texto)| `colorTextoDificil()` | `@Composable` (Theme-aware Rojo) |
 
 ### Funciones de color
 ```kotlin
@@ -95,6 +97,12 @@ fun colorParaTitularidad(tipo: String, titularidadNormalizada: String? = null): 
 // Para chips de filtro
 fun colorParaTitularidadFiltro(filtro: TitularidadFiltro): Color
 fun colorParaTipoCentroFiltro(filtro: TipoCentroFiltro): Color
+
+// Para elementos visuales destacados (Rural / Difícil Desempeño)
+@Composable fun colorFondoDestacado(): Color
+@Composable fun colorFondoChipDestacado(): Color
+@Composable fun colorTextoRural(): Color
+@Composable fun colorTextoDificil(): Color
 ```
 
 ## Componentes Compose clave

@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.Color
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
+import androidx.compose.runtime.Composable
+import androidx.compose.foundation.isSystemInDarkTheme
 
 // ── Titularidad ───────────────────────────────────────────────────────────────
 
@@ -263,6 +265,26 @@ val ColorChipFP         = Color(0xFF00897B) // teal
 val ColorChipAdultos    = Color(0xFF6A1B9A) // púrpura
 val ColorChipEspecial   = Color(0xFFBF360C) // naranja quemado
 val ColorChipOtros      = Color(0xFF757575) // gris
+
+@Composable
+fun colorFondoDestacado(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF332020) // Fondo oscuro muy sutil, ligeramente granate
+    else Color(0xFFFFEBEE)
+
+@Composable
+fun colorFondoChipDestacado(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF4A2A2A) // Un poco más de contraste para el chip
+    else Color(0xFFFFCDD2)
+
+@Composable
+fun colorTextoRural(): Color =
+    if (isSystemInDarkTheme()) Color(0xFFA5D6A7) // Verde pastel brillante para dark mode
+    else Color(0xFF1B5E20)
+
+@Composable
+fun colorTextoDificil(): Color =
+    if (isSystemInDarkTheme()) Color(0xFFEF9A9A) // Rojo suave brillante para dark mode
+    else Color(0xFFB71C1C)
 
 /**
  * Color de marcador/badge.

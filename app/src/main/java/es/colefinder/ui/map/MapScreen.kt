@@ -517,7 +517,7 @@ fun MapScreen(
 
                                 val titularidadLabel = labelParaTitularidad(item.titularidadNormalizada, colegio.tipo)
                                 val destacado = colegio.esDificilDesempeno || colegio.esRural
-                                val itemBgColor = if (destacado) Color(0xFFFFEBEE) else Color.Transparent
+                                val itemBgColor = if (destacado) colorFondoDestacado() else Color.Transparent
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -562,8 +562,8 @@ fun MapScreen(
                                                         if (colegio.esRural) {
                                                             Surface(
                                                                 shape = RoundedCornerShape(4.dp),
-                                                                color = Color(0xFFFFCDD2), // Mismo fondo que Difícil desempeño
-                                                                contentColor = Color(0xFF1B5E20)
+                                                                color = colorFondoChipDestacado(),
+                                                                contentColor = colorTextoRural()
                                                             ) {
                                                                 Text(
                                                                     text = "Rural",
@@ -576,8 +576,8 @@ fun MapScreen(
                                                         if (colegio.esDificilDesempeno) {
                                                             Surface(
                                                                 shape = RoundedCornerShape(4.dp),
-                                                                color = Color(0xFFFFCDD2),
-                                                                contentColor = Color(0xFFB71C1C)
+                                                                color = colorFondoChipDestacado(),
+                                                                contentColor = colorTextoDificil()
                                                             ) {
                                                                 Text(
                                                                     text = "Difícil desempeño",
@@ -894,12 +894,12 @@ fun ColegioDetailCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (colegio.esRural) {
-                            Surface(shape = RoundedCornerShape(50), color = Color(0xFFFFEBEE), contentColor = Color(0xFF1B5E20)) {
+                            Surface(shape = RoundedCornerShape(50), color = colorFondoDestacado(), contentColor = colorTextoRural()) {
                                 Text(text = "Rural", modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                             }
                         }
                         if (colegio.esDificilDesempeno) {
-                            Surface(shape = RoundedCornerShape(50), color = Color(0xFFFFEBEE), contentColor = Color(0xFFB71C1C)) {
+                            Surface(shape = RoundedCornerShape(50), color = colorFondoDestacado(), contentColor = colorTextoDificil()) {
                                 Text(text = "Difícil desempeño", modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                             }
                         }
