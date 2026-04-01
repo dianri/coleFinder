@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.secrets)
 }
 
 android {
@@ -39,6 +40,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -79,4 +81,11 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+// Secrets Gradle Plugin: lee secrets.properties (no versionado) y
+// secrets.defaults.properties (versionado con placeholders) y los expone como BuildConfig fields.
+secrets {
+    propertiesFileName = "secrets.properties"
+    defaultPropertiesFileName = "secrets.defaults.properties"
 }

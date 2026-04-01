@@ -9,9 +9,8 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
 import dagger.hilt.android.lifecycle.HiltViewModel
 import es.colefinder.data.model.Colegio
-import es.colefinder.data.model.NearbyColegioDto
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.postgrest.postgrest
+import es.colefinder.data.repository.ColegioRepository
+import es.colefinder.data.repository.UserPreferencesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,10 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import es.colefinder.data.repository.UserPreferencesRepository
 import javax.inject.Inject
 
 private const val DEFAULT_LAT = 40.4168
@@ -33,7 +28,7 @@ private const val TAG = "MapViewModel"
 
 @HiltViewModel
 class MapViewModel @Inject constructor(
-    private val supabase: SupabaseClient,
+    private val colegioRepository: ColegioRepository,
     private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
@@ -78,53 +73,29 @@ class MapViewModel @Inject constructor(
     }
 
     /**
-     * Carga los N centros más cercanos al punto dado.
-     * Envía al servidor los filtros activos como arrays (p_titularidades, p_tipos).
-     * Si el filtro es TODOS o vacío, no se incluye el parámetro (null en BD = sin restricción).
-     * El filtrado en cliente en MapState.colegiosConDistancia sigue activo como fallback de UI.
+     * Carga los centros más cercanos al punto dado delegando en [ColegioRepository].
+     * El acceso a Supabase ocurre en el repositorio, no aquí.
      */
     fun loadNearbyColegios(lat: Double, lon: Double) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
-            try {
-                val estadoActual    = _state.value
-                val arrayTitularidad = estadoActual.filtrosTitularidad.toRpcArray()
-                val arrayTipo        = estadoActual.filtrosTipoCentro.toRpcArray()
 
-                val params = buildJsonObject {
-                    put("p_lat", lat)
-                    put("p_lon", lon)
-                    put("p_limit", 50)
-                    if (arrayTitularidad != null) putJsonArray("p_titularidades") {
-                        arrayTitularidad.forEach { add(it) }
-                    }
-                    if (arrayTipo != null) putJsonArray("p_tipos") {
-                        arrayTipo.forEach { add(it) }
-                    }
+            val result = colegioRepository.fetchNearbyColegios(
+                lat = lat,
+                lon = lon,
+                titularidades = _state.value.filtrosTitularidad,
+                tipos = _state.value.filtrosTipoCentro
+            )
+
+            result.fold(
+                onSuccess = { cercanos ->
+                    _state.update { it.copy(colegiosCercanos = cercanos, isLoading = false) }
+                },
+                onFailure = { error ->
+                    Log.e(TAG, "loadNearbyColegios: error", error)
+                    _state.update { it.copy(error = error.localizedMessage ?: "Error de conexión", isLoading = false) }
                 }
-                val dtos = supabase.postgrest
-                    .rpc("nearby_colegios", params)
-                    .decodeList<NearbyColegioDto>()
-                val cercanos = dtos
-                    .distinctBy { it.id }
-                    .map { dto ->
-                        ColegioConDistancia(
-                            colegio = dto.toColegio(),
-                            distanciaMetros = dto.distanciaMetros,
-                            tipoCentroClasificado = clasificarTipoCentro(
-                                nombre                = dto.nombre,
-                                tipo                  = dto.tipo ?: "",
-                                descripcionEntidad    = dto.descripcionEntidad,
-                                tipoCentroNormalizado = dto.tipoCentroNormalizado
-                            ),
-                            titularidadNormalizada = dto.titularidadNormalizada
-                        )
-                    }
-                _state.update { it.copy(colegiosCercanos = cercanos, isLoading = false) }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                _state.update { it.copy(error = e.localizedMessage, isLoading = false) }
-            }
+            )
         }
     }
 
@@ -190,8 +161,7 @@ class MapViewModel @Inject constructor(
     fun onMapLongClick(latLng: LatLng) {
         _state.update { it.copy(puntoReferencia = latLng, selectedColegioConDistancia = null, focusedRequestType = FocusedRequestType.POINT) }
         loadNearbyColegios(latLng.latitude, latLng.longitude)
-        
-        // Marcar como descubierto si no lo estaba
+
         if (!_state.value.hasDiscoveredLongPress) {
             viewModelScope.launch {
                 userPreferencesRepository.updateHasDiscoveredLongPress(true)
@@ -202,7 +172,6 @@ class MapViewModel @Inject constructor(
     fun onMapClick() {
         clearSelectedColegio()
         val currentState = _state.value
-        // Mostrar hint ilimitadamente hasta que se descubra
         if (!currentState.hasDiscoveredLongPress) {
             _state.update { it.copy(showLongPressHint = true) }
             viewModelScope.launch {
@@ -213,7 +182,6 @@ class MapViewModel @Inject constructor(
 
     fun onMapMoved() {
         val currentState = _state.value
-        // Al arrastrar el mapa, si no se ha descubierto el long press, mostramos el hint
         if (!currentState.hasDiscoveredLongPress && !currentState.showLongPressHint) {
             _state.update { it.copy(showLongPressHint = true) }
             viewModelScope.launch {
@@ -252,9 +220,6 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    /** Alterna una opción de titularidad. Si el nuevo estado tiene selección única,
-     *  recarga el RPC para que el servidor filtre; si es multi o TODOS, recarga sin filtro
-     *  y el cliente aplica el fallback. */
     fun toggleFiltroTitularidad(filtro: TitularidadFiltro) {
         _state.update { it.copy(
             filtrosTitularidad = toggleTitularidad(it.filtrosTitularidad, filtro)
@@ -262,7 +227,6 @@ class MapViewModel @Inject constructor(
         reloadWithCurrentFilters()
     }
 
-    /** Alterna una opción de tipo de centro. Misma lógica de recarga que titularidad. */
     fun toggleFiltroTipoCentro(filtro: TipoCentroFiltro) {
         _state.update { it.copy(
             filtrosTipoCentro = toggleTipoCentro(it.filtrosTipoCentro, filtro)
@@ -270,11 +234,10 @@ class MapViewModel @Inject constructor(
         reloadWithCurrentFilters()
     }
 
-    /** Recarga los colegios cercanos respecto al punto activo actualmente. */
     private fun reloadWithCurrentFilters() {
         val punto = _state.value.puntoReferencia ?: _state.value.userLocation
-        val lat   = punto?.latitude  ?: DEFAULT_LAT
-        val lon   = punto?.longitude ?: DEFAULT_LON
+        val lat = punto?.latitude ?: DEFAULT_LAT
+        val lon = punto?.longitude ?: DEFAULT_LON
         loadNearbyColegios(lat, lon)
     }
 
@@ -298,7 +261,6 @@ class MapViewModel @Inject constructor(
                         CameraUpdateFactory.newLatLngZoom(latLng, 15f)
                     )
                     loadNearbyColegios(latLng.latitude, latLng.longitude)
-                    // isLoading lo gestiona loadNearbyColegios desde aquí
                 } else {
                     _state.update { it.copy(error = "Dirección no encontrada", isLoading = false) }
                 }

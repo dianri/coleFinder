@@ -5,6 +5,7 @@ output.json
 
 # Local configuration
 local.properties
+secrets.properties
 
 # IntelliJ/Android Studio files
 *.iml
