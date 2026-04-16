@@ -24,8 +24,8 @@ interface ColegioRepository {
      * @param titularidades Filtros de titularidad activos.
      * @param tipos Filtros de tipo de centro activos.
      * @return Lista ordenada por distancia con metadatos precalculados.
-     * @throws NetworkException si hay error de comunicación con Supabase.
-     * @throws Exception para cualquier otro error inesperado.
+     * En error devuelve [Result.failure]; la implementación Supabase adjunta
+     * [es.colefinder.data.network.ColegiosLoadException] con mensaje de usuario.
      */
     suspend fun fetchNearbyColegios(
         lat: Double,

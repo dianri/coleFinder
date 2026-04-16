@@ -3,10 +3,7 @@ package es.colefinder.data
 import es.colefinder.BuildConfig
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
-import io.ktor.client.plugins.logging.Logging
-import io.ktor.client.plugins.logging.LogLevel
-import io.ktor.client.plugins.logging.Logger
-import io.ktor.client.plugins.logging.DEFAULT
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Singleton del cliente Supabase.
@@ -21,6 +18,9 @@ object Supabase {
         supabaseUrl = BuildConfig.SUPABASE_URL,
         supabaseKey = BuildConfig.SUPABASE_ANON_KEY
     ) {
+        // supabase-kt aplica este valor como requestTimeoutMillis en Ktor (por defecto 10s).
+        // Redes móviles lentas (DNS/TLS) suelen beneficiarse de un margen algo mayor.
+        requestTimeout = 25.seconds
         if (BuildConfig.DEBUG) {
             defaultLogLevel = io.github.jan.supabase.logging.LogLevel.DEBUG
         }

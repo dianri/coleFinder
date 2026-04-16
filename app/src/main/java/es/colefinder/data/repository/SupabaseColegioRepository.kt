@@ -15,7 +15,9 @@ import es.colefinder.ui.map.TipoCentroFiltro
 import es.colefinder.ui.map.TitularidadFiltro
 import es.colefinder.ui.map.clasificarTipoCentro
 import es.colefinder.ui.map.toRpcArray
-import java.io.IOException
+import es.colefinder.data.network.ColegiosLoadException
+import es.colefinder.data.network.classifyColegiosLoadFailure
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,10 +29,8 @@ private const val TAG = "SupabaseColegioRepo"
  * Accede directamente a la RPC `nearby_colegios` de Supabase.
  * No usa service_role ni ninguna credencial privilegiada.
  *
- * Manejo de errores:
- * - IOException → error de red/conectividad.
- * - cualquier otra Exception → error inesperado de la API.
- * Ambos casos devueltos como [Result.failure] para que el ViewModel decida cómo presentarlos.
+ * Errores: se clasifican con [classifyColegiosLoadFailure] y se devuelven como
+ * [Result.failure] envuelto en [ColegiosLoadException] (mensaje de usuario + categoría en logs).
  */
 @Singleton
 class SupabaseColegioRepository @Inject constructor(
@@ -60,16 +60,11 @@ class SupabaseColegioRepository @Inject constructor(
                 }
             }
 
-            val dtos: List<NearbyColegioDto> = try {
-                supabase.postgrest
-                    .rpc("nearby_colegios", params) {
-                        schema = BuildConfig.SUPABASE_SCHEMA
-                    }
-                    .decodeList<NearbyColegioDto>()
-            } catch (e: io.github.jan.supabase.exceptions.RestException) {
-                Log.e(TAG, "fetchNearbyColegios: error de PostgREST [${e.message}]: ${e.description}", e)
-                throw e
-            }
+            val dtos: List<NearbyColegioDto> = supabase.postgrest
+                .rpc("nearby_colegios", params) {
+                    schema = BuildConfig.SUPABASE_SCHEMA
+                }
+                .decodeList<NearbyColegioDto>()
 
             val resultado = dtos
                 .distinctBy { it.id }
@@ -90,12 +85,19 @@ class SupabaseColegioRepository @Inject constructor(
             Log.d(TAG, "fetchNearbyColegios: ${resultado.size} centros cargados")
             Result.success(resultado)
 
-        } catch (e: IOException) {
-            Log.e(TAG, "fetchNearbyColegios: error de red", e)
-            Result.failure(e)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "fetchNearbyColegios: error inesperado", e)
-            Result.failure(e)
+            val classified = classifyColegiosLoadFailure(e)
+            Log.e(TAG, "fetchNearbyColegios [${classified.category}] ${classified.technicalDetail}", e)
+            Result.failure(
+                ColegiosLoadException(
+                    category = classified.category,
+                    userMessage = classified.userMessage,
+                    message = classified.technicalDetail,
+                    cause = e
+                )
+            )
         }
     }
 }

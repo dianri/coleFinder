@@ -9,6 +9,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.LatLng
 import dagger.hilt.android.lifecycle.HiltViewModel
 import es.colefinder.data.model.Colegio
+import es.colefinder.data.network.ColegiosLoadException
 import es.colefinder.data.repository.ColegioRepository
 import es.colefinder.data.repository.UserPreferencesRepository
 import kotlinx.coroutines.Dispatchers
@@ -92,8 +93,11 @@ class MapViewModel @Inject constructor(
                     _state.update { it.copy(colegiosCercanos = cercanos, isLoading = false) }
                 },
                 onFailure = { error ->
-                    Log.e(TAG, "loadNearbyColegios: error", error)
-                    _state.update { it.copy(error = error.localizedMessage ?: "Error de conexión", isLoading = false) }
+                    val userMsg = (error as? ColegiosLoadException)?.userMessage
+                        ?: error.localizedMessage?.takeIf { it.isNotBlank() }
+                        ?: "Error de conexión"
+                    Log.e(TAG, "loadNearbyColegios: $userMsg", error)
+                    _state.update { it.copy(error = userMsg, isLoading = false) }
                 }
             )
         }
@@ -132,7 +136,12 @@ class MapViewModel @Inject constructor(
     fun selectSuggestion(suggestion: SearchSuggestion) {
         _state.update { it.copy(suggestions = emptyList()) }
         viewModelScope.launch {
-            _state.update { it.copy(focusedRequestType = FocusedRequestType.SEARCH) }
+            _state.update {
+                it.copy(
+                    puntoReferencia = suggestion.latLng,
+                    focusedRequestType = FocusedRequestType.SEARCH
+                )
+            }
             _state.value.cameraPosition.animate(
                 CameraUpdateFactory.newLatLngZoom(suggestion.latLng, 15f)
             )
@@ -152,6 +161,11 @@ class MapViewModel @Inject constructor(
 
     fun consumeFocusedRequest() {
         _state.update { it.copy(focusedRequestType = FocusedRequestType.NONE) }
+    }
+
+    /** Tras mostrar el error en UI (p. ej. Toast), limpia el estado para evitar repeticiones. */
+    fun clearError() {
+        _state.update { it.copy(error = null) }
     }
 
     fun setMostrarAvisoCentrosLejanos(show: Boolean) {
@@ -256,7 +270,12 @@ class MapViewModel @Inject constructor(
                 }
 
                 if (latLng != null) {
-                    _state.update { it.copy(focusedRequestType = FocusedRequestType.SEARCH) }
+                    _state.update {
+                        it.copy(
+                            puntoReferencia = latLng,
+                            focusedRequestType = FocusedRequestType.SEARCH
+                        )
+                    }
                     _state.value.cameraPosition.animate(
                         CameraUpdateFactory.newLatLngZoom(latLng, 15f)
                     )

@@ -314,6 +314,13 @@ fun MapScreen(
         }
     }
 
+    // Un solo Toast por error de estado (evita spam en recomposiciones)
+    LaunchedEffect(state.error) {
+        val msg = state.error ?: return@LaunchedEffect
+        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        viewModel.clearError()
+    }
+
     // Efecto para mostrar el hint via Snackbar
     LaunchedEffect(state.showLongPressHint) {
         if (state.showLongPressHint) {
@@ -692,7 +699,6 @@ fun MapScreen(
         }
 
         if (state.isLoading) { CircularProgressIndicator(modifier = Modifier.align(Alignment.Center)) }
-        state.error?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
 
         // Overlay: Location FAB
         val fabOffset by remember(fullHeight) {
