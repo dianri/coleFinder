@@ -3,6 +3,13 @@
 build/
 output.json
 
+# Kotlin tooling (compiler sessions, IDE caches)
+.kotlin/
+
+# Local release outputs under app/<flavor>/release/ (artefactos de assemble;
+# la salida estándar va a app/build/outputs/)
+app/*/release/
+
 # Local configuration
 local.properties
 secrets.properties
