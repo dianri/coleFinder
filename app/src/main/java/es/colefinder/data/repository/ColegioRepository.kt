@@ -1,5 +1,6 @@
 package es.colefinder.data.repository
 
+import es.colefinder.data.model.ColegioSearchDto
 import es.colefinder.ui.map.ColegioConDistancia
 import es.colefinder.ui.map.TipoCentroFiltro
 import es.colefinder.ui.map.TitularidadFiltro
@@ -34,4 +35,13 @@ interface ColegioRepository {
         titularidades: Set<TitularidadFiltro> = setOf(TitularidadFiltro.TODOS),
         tipos: Set<TipoCentroFiltro> = setOf(TipoCentroFiltro.TODOS)
     ): Result<List<ColegioConDistancia>>
+
+    /**
+     * Busca centros por nombre (case-insensitive, parcial).
+     * Devuelve DTOs ligeros para autocompletado, sin distancia.
+     */
+    suspend fun searchColegiosByName(
+        query: String,
+        limit: Int = 8
+    ): Result<List<ColegioSearchDto>>
 }

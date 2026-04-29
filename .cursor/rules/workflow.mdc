@@ -26,13 +26,13 @@ Si algo falla en cualquier paso, iterar en vez de declarar éxito prematuramente
 Después de cualquier cambio en código Kotlin/Android:
 
 ```bash
-# Siempre
+# Siempre (usar tasks con flavor explícito; `compileDebugKotlin` es ambiguo con PRE/PROD):
 git diff
-./gradlew :app:compileDebugKotlin
+./gradlew :app:compilePreDebugKotlin :app:compileProdDebugKotlin
 
 # Además, si el cambio afecta a: recursos, navegación, build config,
 # serialización, múltiples módulos, o integración app↔backend:
-./gradlew assembleDebug
+./gradlew :app:assemblePreDebug :app:assembleProdDebug
 ```
 
 - Si la compilación falla: analizar el error, corregirlo, recompilar.
@@ -102,5 +102,7 @@ Cuando se cambie la lógica de filtros (BD o cliente), verificar:
 - [ ] TODOS en un grupo → sin restricción para ese grupo
 - [ ] Filtros en ambos grupos → AND en servidor
 - [ ] Long press en mapa → recarga con filtros actuales
-- [ ] Búsqueda de dirección → recarga con filtros actuales
+- [ ] Búsqueda de dirección → recarga con filtros actuales y `puntoReferencia` actualizado
+- [ ] Búsqueda por nombre de colegio → sugerencias de BD + selección centra mapa
+- [ ] Cambio de filtro tras búsqueda → usa `puntoReferencia` de la búsqueda, no `userLocation`
 - [ ] Apertura de detalle de colegio → card intacta

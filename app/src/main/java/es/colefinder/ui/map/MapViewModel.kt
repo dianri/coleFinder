@@ -14,6 +14,7 @@ import es.colefinder.data.repository.ColegioRepository
 import es.colefinder.data.repository.UserPreferencesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +39,7 @@ class MapViewModel @Inject constructor(
 
     private var searchJob: Job? = null
     private var initialized = false
+    private var pendingColegioSelection: Int? = null
 
     init {
         viewModelScope.launch {
@@ -91,6 +93,10 @@ class MapViewModel @Inject constructor(
             result.fold(
                 onSuccess = { cercanos ->
                     _state.update { it.copy(colegiosCercanos = cercanos, isLoading = false) }
+                    pendingColegioSelection?.let { pendingId ->
+                        pendingColegioSelection = null
+                        cercanos.find { it.colegio.id == pendingId }?.let { onColegioClick(it) }
+                    }
                 },
                 onFailure = { error ->
                     val userMsg = (error as? ColegiosLoadException)?.userMessage
@@ -111,9 +117,10 @@ class MapViewModel @Inject constructor(
         }
 
         searchJob = viewModelScope.launch {
-            delay(300) // Debounce
-            try {
-                val suggestions = withContext(Dispatchers.IO) {
+            delay(300)
+
+            val geocoderDeferred = async(Dispatchers.IO) {
+                try {
                     val geocoder = Geocoder(context)
                     @Suppress("DEPRECATION")
                     geocoder.getFromLocationName(query, 5)?.mapNotNull { address ->
@@ -125,11 +132,27 @@ class MapViewModel @Inject constructor(
                             latLng = LatLng(address.latitude, address.longitude)
                         )
                     } ?: emptyList()
+                } catch (_: Exception) {
+                    emptyList()
                 }
-                _state.update { it.copy(suggestions = suggestions) }
-            } catch (e: Exception) {
-                _state.update { it.copy(suggestions = emptyList()) }
             }
+
+            val colegiosDeferred = async(Dispatchers.IO) {
+                colegioRepository.searchColegiosByName(query)
+                    .getOrDefault(emptyList())
+                    .map { dto ->
+                        SearchSuggestion(
+                            title = dto.nombre,
+                            subtitle = dto.localidad ?: "",
+                            latLng = LatLng(dto.latitud, dto.longitud),
+                            colegioId = dto.id
+                        )
+                    }
+            }
+
+            val colegios = colegiosDeferred.await()
+            val locations = geocoderDeferred.await()
+            _state.update { it.copy(suggestions = colegios + locations) }
         }
     }
 
@@ -145,6 +168,9 @@ class MapViewModel @Inject constructor(
             _state.value.cameraPosition.animate(
                 CameraUpdateFactory.newLatLngZoom(suggestion.latLng, 15f)
             )
+            if (suggestion.colegioId != null) {
+                pendingColegioSelection = suggestion.colegioId
+            }
             loadNearbyColegios(suggestion.latLng.latitude, suggestion.latLng.longitude)
         }
     }

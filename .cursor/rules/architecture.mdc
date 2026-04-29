@@ -51,17 +51,24 @@ interface ColegioRepository {
         titularidades: Set<TitularidadFiltro> = setOf(TitularidadFiltro.TODOS),
         tipos: Set<TipoCentroFiltro> = setOf(TipoCentroFiltro.TODOS)
     ): Result<List<ColegioConDistancia>>
+
+    suspend fun searchColegiosByName(
+        query: String,
+        limit: Int = 8
+    ): Result<List<ColegioSearchDto>>
 }
 ```
 
 ### `SupabaseColegioRepository` (`data/repository/`)
 Implementación concreta de `ColegioRepository`:
 - Ejecuta en `Dispatchers.IO`.
-- Construye los parámetros JSON con `buildJsonObject` y envía `p_titularidades` / `p_tipos`
-  como `JsonArray` solo si hay filtros concretos (null = sin restricción en BD).
-- Llama a `supabase.postgrest.rpc("nearby_colegios", params) { schema = BuildConfig.SUPABASE_SCHEMA }`.
-- Aplica `.distinctBy { it.id }` antes de mapear DTO → dominio.
-- Devuelve `Result<List<ColegioConDistancia>>` (nunca lanza directamente).
+- `fetchNearbyColegios`: construye parámetros JSON con `buildJsonObject`, llama a
+  `supabase.postgrest.rpc("nearby_colegios", params) { schema = BuildConfig.SUPABASE_SCHEMA }`.
+  Aplica `.distinctBy { it.id }` antes de mapear DTO → dominio.
+- `searchColegiosByName`: consulta PostgREST directa con `from(schema, "colegios").select { ilike("nombre", ...) }`.
+  Devuelve `List<ColegioSearchDto>` (DTO ligero: id, nombre, localidad, lat, lon).
+- Errores de `fetchNearbyColegios` se clasifican con `classifyColegiosLoadFailure()` (`data/network/ColegiosLoadError.kt`)
+  y se devuelven como `Result.failure(ColegiosLoadException(...))` con categoría (DNS, TIMEOUT, SSL, etc.) y mensaje de usuario.
 - Registrada en Hilt via `RepositoryModule` (`@Binds`).
 
 ### `UserPreferencesRepository` (`data/repository/`)
@@ -105,12 +112,22 @@ data class MapState(
 }
 ```
 
+### `SearchSuggestion` (en `MapState.kt`)
+```kotlin
+data class SearchSuggestion(
+    val title: String,
+    val subtitle: String,
+    val latLng: LatLng,
+    val colegioId: Int? = null   // non-null → centro de BD; null → ubicación de Geocoder
+)
+```
+
 ### `FocusedRequestType` (enum en `MapState.kt`)
 ```kotlin
 enum class FocusedRequestType { NONE, MY_LOCATION, POINT, SEARCH }
 ```
 Controla si la cámara debe auto-ajustar el encuadre tras una carga.
-El ViewModel lo activa en `initializeMap`, `updateUserLocation`, `onMapLongClick` y `selectSuggestion`.
+El ViewModel lo activa en `updateUserLocation`, `onMapLongClick`, `selectSuggestion` y `buscarDireccion`.
 La UI lo consume en un `LaunchedEffect` y llama a `viewModel.consumeFocusedRequest()` al terminar.
 
 ### `ColegioConDistancia`
@@ -135,9 +152,13 @@ data class ColegioConDistancia(
   (usa `puntoReferencia` o `userLocation` o Madrid por defecto).
 - `toggleFiltroTitularidad(filtro)` / `toggleFiltroTipoCentro(filtro)`:
   actualizan sets de filtros **y recargan** vía `reloadWithCurrentFilters()`.
-- `onSearchQueryChanged(query, context)`: Geocoder con debounce de 300 ms.
-- `selectSuggestion(suggestion)`: centra la cámara y recarga centros.
-- `updateUserLocation(latLng)`: centra la cámara en la ubicación del usuario y recarga.
+- `onSearchQueryChanged(query, context)`: búsqueda híbrida con debounce de 300 ms.
+  Lanza en paralelo (`async`): Geocoder (ubicaciones) + `colegioRepository.searchColegiosByName` (centros por nombre).
+  Fusiona resultados: colegios primero, luego ubicaciones.
+- `selectSuggestion(suggestion)`: centra la cámara, fija `puntoReferencia` y recarga centros.
+  Si `suggestion.colegioId != null`, fija `pendingColegioSelection` para auto-seleccionar
+  el centro tras la carga de `loadNearbyColegios`.
+- `updateUserLocation(latLng)`: centra la cámara en la ubicación del usuario, limpia `puntoReferencia` y recarga.
 - `onMapLongClick(latLng)`: marca `puntoReferencia`, recarga centros, persiste descubrimiento.
 - `onMapClick()`: limpia selección; muestra hint si el usuario aún no ha descubierto el long press.
 - `onMapMoved()`: muestra hint si el usuario aún no ha descubierto el long press.
@@ -147,8 +168,9 @@ data class ColegioConDistancia(
 - `clearSelectedColegio()`: limpia `selectedColegioConDistancia`.
 - `toggleFavorito(colegioId)`: alterna el id en `favoritosIds` (in-memory).
 - `setMostrarAvisoCentrosLejanos(Boolean)`: activa/desactiva el aviso de centros lejanos.
+- `clearError()`: limpia `state.error` tras mostrarlo en UI (evita toasts repetidos).
 - `consumeFocusedRequest()`: resetea `focusedRequestType` a NONE tras consumir el auto-encuadre.
-- `buscarDireccion(query, context)`: busca con Geocoder, centra cámara y recarga centros.
+- `buscarDireccion(query, context)`: busca con Geocoder, centra cámara, fija `puntoReferencia` y recarga centros.
 
 > **Nota sobre `focusOnCurrentLocationAndLoadNearby`**: esta función existe como
 > lambda local dentro de `MapScreen` (no en el ViewModel). Usa `FusedLocationProviderClient`
@@ -165,11 +187,13 @@ data class ColegioConDistancia(
 | `MapViewModel.kt` | Lógica de negocio, delegación a repositorios |
 | `MapScreen.kt` | UI Compose principal + `MapSheetValue` enum + sheet custom |
 | `CentroFiltros.kt` | Enums de filtros, clasificación de tipo, colores, toggle logic, arrays RPC |
-| `NearbyColegioDto.kt` | DTO de deserialización de la RPC |
+| `NearbyColegioDto.kt` | DTO de deserialización de la RPC `nearby_colegios` |
+| `ColegioSearchDto.kt` | DTO ligero para búsqueda por nombre (id, nombre, localidad, lat, lon) |
 | `Colegio.kt` | Modelo de dominio + `JornadaTipo` enum |
 | `ColegioRepository.kt` | Interfaz de acceso a datos |
 | `SupabaseColegioRepository.kt` | Implementación Supabase de `ColegioRepository` |
 | `UserPreferencesRepository.kt` | Persistencia de preferencias con DataStore |
+| `ColegiosLoadError.kt` | Clasificación de errores de red: `ColegiosLoadCategory`, `ColegiosLoadException` |
 | `NetworkModule.kt` / `RepositoryModule.kt` | Módulos Hilt (en `di/`) |
 
 ---

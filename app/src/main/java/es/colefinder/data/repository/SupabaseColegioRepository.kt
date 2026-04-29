@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import es.colefinder.data.model.ColegioSearchDto
 import es.colefinder.data.model.NearbyColegioDto
 import es.colefinder.ui.map.ColegioConDistancia
 import es.colefinder.ui.map.TipoCentroFiltro
@@ -17,6 +18,7 @@ import es.colefinder.ui.map.clasificarTipoCentro
 import es.colefinder.ui.map.toRpcArray
 import es.colefinder.data.network.ColegiosLoadException
 import es.colefinder.data.network.classifyColegiosLoadFailure
+import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -98,6 +100,32 @@ class SupabaseColegioRepository @Inject constructor(
                     cause = e
                 )
             )
+        }
+    }
+
+    override suspend fun searchColegiosByName(
+        query: String,
+        limit: Int
+    ): Result<List<ColegioSearchDto>> = withContext(Dispatchers.IO) {
+        try {
+            val sanitized = query.replace("%", "").replace("_", "").trim()
+            if (sanitized.length < 2) return@withContext Result.success(emptyList())
+
+            val results = supabase.postgrest
+                .from(BuildConfig.SUPABASE_SCHEMA, "colegios")
+                .select(columns = Columns.list("id", "nombre", "localidad", "latitud", "longitud")) {
+                    filter { ilike("nombre", "%$sanitized%") }
+                    limit(limit.toLong())
+                }
+                .decodeList<ColegioSearchDto>()
+
+            Log.d(TAG, "searchColegiosByName '$sanitized': ${results.size} resultados")
+            Result.success(results)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "searchColegiosByName: error", e)
+            Result.failure(e)
         }
     }
 }
