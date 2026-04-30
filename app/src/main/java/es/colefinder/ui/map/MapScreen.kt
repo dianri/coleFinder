@@ -40,8 +40,6 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.School
@@ -65,8 +63,6 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SearchBar
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.platform.LocalDensity
@@ -220,7 +216,6 @@ fun MapScreen(
     }
 
     val navBarPx = WindowInsets.navigationBars.getBottom(density).toFloat()
-    val snackbarHostState = remember { SnackbarHostState() }
 
     // Custom NestedScrollConnection para coordinar el scroll entre la lista y el panel
     val customNestedScrollConnection = remember(anchoredDraggableState) {
@@ -307,8 +302,9 @@ fun MapScreen(
                 pendingLocationRequest = false
             }
         } else {
-            // Si no hay permisos, inicializamos el mapa en la posición por defecto solo al arrancar
-            if (isFirstLoad && !locationPermissionsState.shouldShowRationale) {
+            // Sin permisos: Madrid por defecto + RPC. Tras un denegación previa,
+            // shouldShowRationale suele ser true; no debe impedir initializeMap (regresión).
+            if (isFirstLoad) {
                 viewModel.initializeMap(null)
                 isFirstLoad = false
             }
@@ -320,16 +316,6 @@ fun MapScreen(
         val msg = state.error ?: return@LaunchedEffect
         Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
         viewModel.clearError()
-    }
-
-    // Efecto para mostrar el hint via Snackbar
-    LaunchedEffect(state.showLongPressHint) {
-        if (state.showLongPressHint) {
-            snackbarHostState.showSnackbar(
-                message = "Mantén pulsado el mapa para buscar centros cerca de ese punto"
-            )
-            viewModel.onHintDismissed()
-        }
     }
 
     // Efecto para activar el hint al arrastrar el mapa
@@ -686,9 +672,7 @@ fun MapScreen(
                 val colegio = colegioConDistancia.colegio
                 ColegioDetailCard(
                     colegioConDistancia = colegioConDistancia,
-                    isFavorito = colegio.id in state.favoritosIds,
                     onClose = { viewModel.clearSelectedColegio() },
-                    onFavorito = { viewModel.toggleFavorito(colegio.id) },
                     onNavigate = {
                         val uri = Uri.parse("google.navigation:q=${colegio.latitud},${colegio.longitud}")
                         val mapIntent = Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps")
@@ -842,9 +826,7 @@ fun MapScreen(
 @Composable
 fun ColegioDetailCard(
     colegioConDistancia: ColegioConDistancia,
-    isFavorito: Boolean,
     onClose: () -> Unit,
-    onFavorito: () -> Unit,
     onNavigate: () -> Unit,
     onCall: () -> Unit,
     onVerDetalle: () -> Unit
@@ -873,13 +855,6 @@ fun ColegioDetailCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = onFavorito, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        imageVector = if (isFavorito) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = if (isFavorito) "Quitar de favoritos" else "Añadir a favoritos",
-                        tint = if (isFavorito) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
                 IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.Close, contentDescription = "Cerrar") }
             }
             Spacer(modifier = Modifier.height(10.dp))

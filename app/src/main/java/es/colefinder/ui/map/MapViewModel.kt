@@ -16,12 +16,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 private const val DEFAULT_LAT = 40.4168
@@ -38,6 +40,8 @@ class MapViewModel @Inject constructor(
     val state: StateFlow<MapState> = _state.asStateFlow()
 
     private var searchJob: Job? = null
+    private var nearbyLoadJob: Job? = null
+    private val nearbyLoadGeneration = AtomicInteger(0)
     private var initialized = false
     private var pendingColegioSelection: Int? = null
 
@@ -78,20 +82,37 @@ class MapViewModel @Inject constructor(
     /**
      * Carga los centros más cercanos al punto dado delegando en [ColegioRepository].
      * El acceso a Supabase ocurre en el repositorio, no aquí.
+     *
+     * Solo una petición cercana está activa: cada llamada cancela la anterior y usa un
+     * contador de generación para ignorar respuestas obsoletas si una respuesta llega
+     * fuera de orden (p. ej. toggles rápidos de filtros).
+     *
+     * La generación se incrementa **antes** de [Job.cancel] y del nuevo [launch], para que
+     * cualquier continuación rezagada de una petición anterior vea de inmediato un
+     * `generation != nearbyLoadGeneration` aunque el incremento dentro del nuevo job aún no
+     * se haya ejecutado (orden en el hilo principal entre cancel y el primer suspend).
      */
     fun loadNearbyColegios(lat: Double, lon: Double) {
-        viewModelScope.launch {
+        val generation = nearbyLoadGeneration.incrementAndGet()
+        nearbyLoadJob?.cancel()
+        nearbyLoadJob = viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
+            val titularidades = _state.value.filtrosTitularidad
+            val tipos = _state.value.filtrosTipoCentro
             val result = colegioRepository.fetchNearbyColegios(
                 lat = lat,
                 lon = lon,
-                titularidades = _state.value.filtrosTitularidad,
-                tipos = _state.value.filtrosTipoCentro
+                titularidades = titularidades,
+                tipos = tipos
             )
+
+            ensureActive()
+            if (generation != nearbyLoadGeneration.get()) return@launch
 
             result.fold(
                 onSuccess = { cercanos ->
+                    if (generation != nearbyLoadGeneration.get()) return@fold
                     _state.update { it.copy(colegiosCercanos = cercanos, isLoading = false) }
                     pendingColegioSelection?.let { pendingId ->
                         pendingColegioSelection = null
@@ -99,6 +120,7 @@ class MapViewModel @Inject constructor(
                     }
                 },
                 onFailure = { error ->
+                    if (generation != nearbyLoadGeneration.get()) return@fold
                     pendingColegioSelection = null
                     val userMsg = (error as? ColegiosLoadException)?.userMessage
                         ?: error.localizedMessage?.takeIf { it.isNotBlank() }
