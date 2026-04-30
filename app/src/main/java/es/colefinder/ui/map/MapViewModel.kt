@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 private const val DEFAULT_LAT = 40.4168
@@ -38,6 +39,8 @@ class MapViewModel @Inject constructor(
     val state: StateFlow<MapState> = _state.asStateFlow()
 
     private var searchJob: Job? = null
+    private var nearbyLoadJob: Job? = null
+    private val nearbyLoadGeneration = AtomicInteger(0)
     private var initialized = false
     private var pendingColegioSelection: Int? = null
 
@@ -80,7 +83,9 @@ class MapViewModel @Inject constructor(
      * El acceso a Supabase ocurre en el repositorio, no aquí.
      */
     fun loadNearbyColegios(lat: Double, lon: Double) {
-        viewModelScope.launch {
+        nearbyLoadJob?.cancel()
+        nearbyLoadJob = viewModelScope.launch {
+            val gen = nearbyLoadGeneration.incrementAndGet()
             _state.update { it.copy(isLoading = true, error = null) }
 
             val result = colegioRepository.fetchNearbyColegios(
@@ -89,6 +94,8 @@ class MapViewModel @Inject constructor(
                 titularidades = _state.value.filtrosTitularidad,
                 tipos = _state.value.filtrosTipoCentro
             )
+
+            if (gen != nearbyLoadGeneration.get()) return@launch
 
             result.fold(
                 onSuccess = { cercanos ->
