@@ -99,6 +99,7 @@ class MapViewModel @Inject constructor(
                     }
                 },
                 onFailure = { error ->
+                    pendingColegioSelection = null
                     val userMsg = (error as? ColegiosLoadException)?.userMessage
                         ?: error.localizedMessage?.takeIf { it.isNotBlank() }
                         ?: "Error de conexión"

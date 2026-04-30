@@ -112,7 +112,7 @@ class SupabaseColegioRepository @Inject constructor(
             if (sanitized.length < 2) return@withContext Result.success(emptyList())
 
             val results = supabase.postgrest
-                .from(BuildConfig.SUPABASE_SCHEMA, "colegios")
+                .from("colegios")
                 .select(columns = Columns.list("id", "nombre", "localidad", "latitud", "longitud")) {
                     filter { ilike("nombre", "%$sanitized%") }
                     limit(limit.toLong())
