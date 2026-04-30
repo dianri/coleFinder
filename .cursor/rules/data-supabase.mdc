@@ -7,10 +7,29 @@ alwaysApply: true
 - Backend: Supabase (Postgres + PostgREST).
 - Cliente de red: Supabase SDK (`postgrest-kt` v3.0.3) + Ktor.
 - Inyección de dependencias: Hilt.
-- Cliente centralizado: `SupabaseClient`.
-- Configuración de red: `NetworkModule`.
+- Cliente centralizado: `SupabaseClient` (provisto por `NetworkModule`).
+- Acceso a datos: `ColegioRepository` (interfaz) / `SupabaseColegioRepository` (implementación).
 
-## Tabla principal: `public.colegios`
+## Arquitectura PRE/PROD (Separación de Esquemas)
+
+El proyecto utiliza un aislamiento basado en esquemas de Postgres dentro de la misma base de datos.
+
+- **PRE (Staging)**: Esquema `staging`.
+- **PROD (Production)**: Esquema `public`.
+
+### Reglas de Desarrollo
+1. **Validación primero**: Cualquier cambio en datos (`colegios`) o funciones (`nearby_colegios`) debe implementarse y validarse primero en el esquema `staging` usando el flavor Android `pre`.
+2. **Promoción Controlada**: No editar `public` a mano. La promoción se realiza mediante scripts SQL (`supabase/scripts/promote_*`).
+3. **RPCs Multi-Esquema**: Al invocar funciones RPC desde Android, se debe especificar el esquema en el bloque `rpc(...) { schema = BuildConfig.SUPABASE_SCHEMA }`. Las llamadas en PRE **obligan** al envío de la cabecera `Content-Profile: staging`.
+
+## Seguridad
+
+### Gestión de Secretos
+1. **Archivo `secrets.properties`**: NUNCA se versiona ni se incluye en commits. Git debe ignorarlo siempre.
+2. **Archivo `secrets.defaults.properties`**: Solo contiene placeholders.
+3. **RLS (Row Level Security)**: Debe estar habilitado tanto en `public` como en `staging`. El rol `anon` solo tiene permisos de `SELECT` y `EXECUTE` controlados.
+
+## Tabla principal: `public.colegios` / `staging.colegios`
 
 Es la **única tabla de lectura** que usa la app. La app no hace `insert`/`update`/`delete` sobre ella; los datos se poblan desde jobs/scripts en servidor.
 
@@ -25,14 +44,17 @@ Es la **única tabla de lectura** que usa la app. La app no hace `insert`/`updat
 | `longitud` | `double precision` | |
 | `tipo` | `text` | Texto libre de titularidad (inconsistente entre fuentes; usar `titularidad_normalizada` preferentemente) |
 | `localidad` | `text` | |
-| `provincia` | `text` | |
-| `telefono` | `text` | |
+| `provincia` | `text` | Solo en BD y DTO; **no mapeado al modelo de dominio `Colegio`** |
+| `telefono` | `text` | Nullable |
 | `fuente` | `text` | Origen: `'andalucia'`, `'castilla_y_leon'`, `'canarias'`, `'comunidad_madrid'`, `'datos.madrid.es'` |
 | `fuente_id` | `bigint` | ID en la tabla de import correspondiente |
 | `descripcion_entidad` | `text` | Campo libre de Madrid open data |
 | `categoria_madrid` | `text` | URL path de categoría (solo fuente `datos.madrid.es`) |
 | `tipo_centro_normalizado` | `text` | **Normalizado en BD**: `PRIMARIA`, `SECUNDARIA`, `FP`, `ADULTOS`, `ESPECIAL`, `OTROS` |
 | `titularidad_normalizada` | `text` | **Normalizado en BD**: `PUBLICO`, `CONCERTADO`, `PRIVADO`, `OTRO` |
+| `es_dificil_desempeno` | `boolean` | Default false. Indica centros de difícil desempeño para docentes. |
+| `es_rural` | `boolean` | Default false. Indica colegios públicos rurales y centros en zonas despobladas. |
+| `jornada_tipo` | `text` | Default `'desconocida'`. Valores: `continua`, `partida`, `desconocida`. |
 
 **Unicidad:** índice `colegios_fuente_fuente_id_key` en `(fuente, fuente_id)`.
 
@@ -48,28 +70,84 @@ Los campos `tipo_centro_normalizado` y `titularidad_normalizada` se poblaron des
 | `comunidad_madrid` | `centros_educativos_import_comunidad_madrid` | `centro_codigo` | `centro_tipo_desc_abreviada` | `centro_titularidad` |
 | `datos.madrid.es` | `colegios_import_madrid` | `"PK"` | `"TIPO"` (URL path) | inferido del `"TIPO"` |
 
-Si se añaden nuevas fuentes o se reimportan datos, aplicar los mismos UPDATEs con `UPDATE public.colegios SET ... FROM <tabla_import> WHERE fuente='...' AND fuente_id = <key>`.
+Si se añaden nuevas fuentes o se reimportan datos, aplicar los mismos UPDATEs con `UPDATE [<schema>].colegios SET ... FROM <tabla_import> WHERE fuente='...' AND fuente_id = <key>`.
 
 ## RPC: `nearby_colegios`
 
-Función SQL en Supabase que devuelve los N centros más cercanos a un punto (Haversine).
+Función SQL en Supabase que devuelve los N centros más cercanos usando índice espacial GIST (PostGIS).
 
 ```sql
 -- Firma actual
-nearby_colegios(p_lat double precision, p_lon double precision, p_limit integer DEFAULT 50)
+nearby_colegios(
+  p_lat           double precision,
+  p_lon           double precision,
+  p_limit         integer  DEFAULT 50,
+  p_titularidades text[]   DEFAULT NULL,   -- multiseleccion de titularidad
+  p_tipos         text[]   DEFAULT NULL    -- multiseleccion de tipo de centro
+)
 
--- Campos devueltos
+-- Campos devueltos:
 id, nombre, direccion, localidad, provincia, tipo, latitud, longitud, telefono,
-descripcion_entidad, tipo_centro_normalizado, titularidad_normalizada, distancia_metros
+descripcion_entidad, tipo_centro_normalizado, titularidad_normalizada,
+distancia_metros, es_dificil_desempeno, jornada_tipo, es_rural
 ```
 
-- **Sin parámetros de filtro**: la RPC no filtra por titularidad ni tipo; el filtrado lo aplica el cliente en `MapState.colegiosConDistancia`.
+- Los filtros usan `= ANY(array)` en SQL. Si el array es NULL, no se aplica restricción.
+- Orden por cercanía usando operador espacial `<->` (KNN sobre índice GIST `idx_colegios_location`).
 - La app siempre llama con `p_limit = 50`.
-- Se invoca mediante `supabase.postgrest.rpc("nearby_colegios", params).decodeList<NearbyColegioDto>()`.
+- Se invoca mediante `SupabaseColegioRepository` (nunca directamente desde el ViewModel):
+  ```kotlin
+  supabase.postgrest.rpc("nearby_colegios", params) {
+      schema = BuildConfig.SUPABASE_SCHEMA
+  }.decodeList<NearbyColegioDto>()
+  ```
+- Los arrays se construyen en Kotlin con `Set<TitularidadFiltro>.toRpcArray()` (en `CentroFiltros.kt`).
+- Si el set de filtros contiene `TODOS` o está vacío, el parámetro no se incluye (null en BD).
 
-## Modelo Kotlin
+### Regla crítica: Promoción y Coexistencia
+1. Si se modifica la firma, primero aplicar en `staging`.
+2. Al promocionar a `public`, asegurar que se actualizan los permisos (`GRANT EXECUTE ON FUNCTION public.nearby_colegios TO anon`).
+3. Verificar después que solo existe una función por schema:
+```sql
+SELECT pronamespace::regnamespace as schema, proname, pg_get_function_arguments(oid) FROM pg_proc
+WHERE proname = 'nearby_colegios';
+```
 
-### `Colegio` (dominio)
+### Reglas permanentes para RPCs geográficas
+1. No reescribir desde cero `nearby_colegios` si ya existe una versión funcionando; partir de la actual y aplicar cambios mínimos.
+2. Antes de cerrar cualquier cambio, validar obligatoriamente: esquema real de PostGIS, `search_path` correcto en la función, tipo real de `location` y compatibilidad de tipos en cualquier uso de `<->`, `ST_DWithin`, `ST_Distance`.
+3. Si `location` es `geography`, cualquier punto de referencia comparable debe acabar en `::geography`.
+4. Después del `CREATE OR REPLACE FUNCTION`, ejecutar siempre un smoke test.
+5. No dar por bueno un cambio solo porque compile Kotlin; la RPC debe probarse en BD.
+
+## Capa de repositorio Kotlin
+
+### `ColegioRepository` (interfaz — `data/repository/`)
+Contrato para acceso a datos de centros. Ver detalles en `architecture.mdc`.
+
+### `SupabaseColegioRepository` (`data/repository/`, `@Singleton`)
+Implementación sobre Supabase. Responsabilidades:
+- **`fetchNearbyColegios`**: construir `JsonObject` con parámetros, llamar a la RPC con el schema correcto,
+  aplicar `.distinctBy { it.id }`, mapear `NearbyColegioDto` → `ColegioConDistancia`.
+  Errores se clasifican con `classifyColegiosLoadFailure()` y se devuelven como
+  `Result.failure(ColegiosLoadException(...))` con categoría y mensaje de usuario.
+- **`searchColegiosByName`**: consulta PostgREST directa (`from(schema, "colegios").select { ilike("nombre", ...) }`),
+  devuelve `List<ColegioSearchDto>` (DTO ligero). Errores silenciosos (`Result.failure` sin clasificación detallada).
+- Ambos métodos ejecutan en `Dispatchers.IO` y respetan `CancellationException` (rethrow).
+
+### `UserPreferencesRepository` (`data/repository/`, `@Singleton`)
+Persiste preferencias de UI mediante **DataStore Preferences**:
+
+| Clave | Tipo | Descripción |
+|---|---|---|
+| `has_discovered_long_press` | `Boolean` | Si el usuario ya ha pulsado largo en el mapa |
+| `long_press_hint_count` | `Int` | Número de veces que se ha mostrado el hint |
+
+Expone `userPreferencesFlow: Flow<UserPreferences>`. El ViewModel se suscribe en `init {}`.
+
+## Modelos Kotlin
+
+### `Colegio` (dominio — `data/model/Colegio.kt`)
 ```kotlin
 @Serializable
 data class Colegio(
@@ -77,14 +155,36 @@ data class Colegio(
     val nombre: String,
     val direccion: String,
     val localidad: String,
-    val tipo: String,
+    val tipo: String,           // Texto libre de titularidad (usa titularidadNormalizada de ColegioConDistancia preferentemente)
     val latitud: Double,
     val longitud: Double,
-    val telefono: String?
+    val telefono: String?,
+    val esDificilDesempeno: Boolean = false,
+    val esRural: Boolean = false,
+    val jornadaTipo: JornadaTipo = JornadaTipo.DESCONOCIDA
+)
+// Nota: `provincia` NO está en el modelo de dominio; solo existe en la BD y en el DTO.
+
+enum class JornadaTipo(val label: String) {
+    CONTINUA("Continua"),
+    PARTIDA("Partida"),
+    DESCONOCIDA("Desconocida")
+}
+```
+
+### `ColegioSearchDto` (DTO de búsqueda por nombre — `data/model/ColegioSearchDto.kt`)
+```kotlin
+@Serializable
+data class ColegioSearchDto(
+    val id: Int,
+    val nombre: String,
+    val localidad: String? = null,
+    val latitud: Double,
+    val longitud: Double
 )
 ```
 
-### `NearbyColegioDto` (DTO de RPC)
+### `NearbyColegioDto` (DTO de RPC — `data/model/NearbyColegioDto.kt`)
 ```kotlin
 @Serializable
 data class NearbyColegioDto(
@@ -95,11 +195,16 @@ data class NearbyColegioDto(
     val longitud: Double,
     val tipo: String? = null,
     val localidad: String? = null,
-    val provincia: String? = null,
+    val provincia: String? = null,      // Solo en DTO, no en Colegio
+    val fuente: String? = null,
+    @SerialName("fuente_id")           val fuenteId: Long? = null,
     val telefono: String? = null,
     @SerialName("descripcion_entidad")     val descripcionEntidad: String? = null,
     @SerialName("tipo_centro_normalizado") val tipoCentroNormalizado: String? = null,
     @SerialName("titularidad_normalizada") val titularidadNormalizada: String? = null,
+    @SerialName("es_dificil_desempeno")    val esDificilDesempeno: Boolean = false,
+    @SerialName("jornada_tipo")            val jornadaTipo: String = "desconocida",
+    @SerialName("es_rural")                val esRural: Boolean = false,
     @SerialName("distancia_metros")        val distanciaMetros: Double
 )
 ```
@@ -110,16 +215,34 @@ data class NearbyColegioDto(
 - Priorizar soluciones gratuitas frente a APIs externas de pago.
 - Mantener debounce de 300ms para autocompletado de direcciones.
 
+## Clasificación de errores de red (`data/network/ColegiosLoadError.kt`)
+
+Los errores de `fetchNearbyColegios` se clasifican en `ColegiosLoadCategory`:
+`DNS`, `TIMEOUT`, `SSL`, `CONNECTION_REFUSED`, `HTTP_CLIENT`, `HTTP_SERVER`, `NETWORK_GENERIC`, `UNKNOWN`.
+
+- `classifyColegiosLoadFailure(throwable)` recorre la cadena de `cause` y usa heurísticas de mensaje
+  para `HttpRequestException` de supabase-kt (que no encadena `cause`).
+- `ColegiosLoadException` transporta `category`, `userMessage` y `cause` original en `Result.failure`.
+- El ViewModel extrae `userMessage` para la UI; Logcat registra `[CATEGORÍA] technicalDetail`.
+
+## Cliente Supabase (`data/Supabase.kt`)
+
+- `requestTimeout = 25.seconds` (propiedad del builder de supabase-kt → `HttpTimeout.requestTimeoutMillis` en Ktor).
+  Por defecto del SDK era 10s; subido para redes móviles lentas.
+- `defaultLogLevel = DEBUG` solo en builds debug.
+- `defaultSchema = BuildConfig.SUPABASE_SCHEMA` en Postgrest.
+
 ## Rendimiento y arquitectura de datos
 - Evitar cálculos pesados en el Main Thread.
-- Manejar errores de red con cuidado.
+- Manejar errores de red con cuidado (devolver `Result.failure`).
 - No duplicar lógica de acceso a Supabase en la UI.
-- Centralizar acceso a datos en ViewModel + cliente inyectado.
+- Centralizar acceso a datos en `ColegioRepository` + cliente inyectado.
 
-## Persistencia futura
-- El roadmap contempla Room para favoritos y modo offline.
-- También contempla sincronización selectiva Room + Supabase.
-- Si una tarea toca persistencia, respetar esta dirección arquitectónica.
+## Persistencia Local
+- **DataStore Preferences**: En uso. Persiste `hasDiscoveredLongPress` y `longPressHintCount` entre sesiones.
+- **Room (Planned/Backlog)**: El roadmap contempla Room para favoritos y modo offline.
+  Los favoritos existen hoy como `Set<Int>` in-memory en `MapState.favoritosIds`.
+  Cuando se implemente Room, `ColegioRepository` puede extenderse sin tocar el ViewModel.
 - No introducir otra base de datos local diferente sin que se solicite explícitamente.
 
 ## Seguridad

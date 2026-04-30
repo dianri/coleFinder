@@ -1,0 +1,108 @@
+---
+description: Flujo de trabajo obligatorio del agente para ColeFinder
+globs:
+alwaysApply: true
+---
+
+# ColeFinder - Flujo de Trabajo del Agente
+
+## Orden obligatorio de trabajo
+
+Para cualquier tarea de implementación, seguir siempre este orden:
+
+1. **Inspección** — leer los archivos relevantes antes de proponer nada.
+2. **Plan corto** — resumir qué archivos se tocarán y por qué.
+3. **Implementación mínima** — cambios pequeños, seguros y fáciles de revisar.
+4. **`git diff`** — verificar que no se ha tocado nada fuera del alcance.
+5. **Compilación** — validar que el código compila antes de declarar éxito.
+6. **Resultado final** — resumen de archivos modificados, riesgos y checklist de prueba.
+
+Si algo falla en cualquier paso, iterar en vez de declarar éxito prematuramente.
+
+---
+
+## Compilación obligatoria
+
+Después de cualquier cambio en código Kotlin/Android:
+
+```bash
+# Siempre (usar tasks con flavor explícito; `compileDebugKotlin` es ambiguo con PRE/PROD):
+git diff
+./gradlew :app:compilePreDebugKotlin :app:compileProdDebugKotlin
+
+# Además, si el cambio afecta a: recursos, navegación, build config,
+# serialización, múltiples módulos, o integración app↔backend:
+./gradlew :app:assemblePreDebug :app:assembleProdDebug
+```
+
+- Si la compilación falla: analizar el error, corregirlo, recompilar.
+- **No cerrar una tarea como "completada" sin validación de compilación.**
+
+---
+
+## Filosofía de cambios
+
+- Si hay duda sobre el alcance o falta contexto, preguntar antes de modificar.
+- No mover lógica costosa al Main Thread.
+- Mantener compatibilidad con Hilt, Compose y Supabase SDK.
+
+---
+
+## Revisión post-edición obligatoria
+
+Después de editar archivos, proporcionar siempre:
+
+| Qué incluir | Detalle |
+|:---|:---|
+| Archivos modificados | Lista exacta |
+| Motivo del cambio | Una línea por archivo |
+| Riesgos o supuestos | Si existen |
+| `git diff` limpio | Sin cambios fuera del alcance |
+
+Si se detectan cambios accidentales fuera del alcance, parar y avisar al usuario.
+
+---
+
+## Cambios de integración app↔backend (alta prioridad)
+
+Un cambio es de **integración** si toca el contrato entre la app Android y Supabase. Ejemplos:
+- Firma de una función RPC (parámetros, tipos, arrays)
+- DTO de respuesta (`NearbyColegioDto`)
+- Parámetros enviados desde `MapViewModel`
+- Lógica de filtrado que pase del cliente al servidor
+
+Para cualquier cambio de integración, revisar **siempre los dos lados**:
+
+| Lado | Qué verificar |
+|:---|:---|
+| SQL / RPC | Firma actual con `pg_get_function_arguments`, no dejar versiones obsoletas coexistiendo |
+| Kotlin | Nombres de parámetros en `buildJsonObject` coinciden exactamente con params SQL |
+| DTO | Campos `@SerialName` alineados con lo que devuelve la RPC |
+| Estado UI | `MapState`, `MapViewModel`, filtros y toggling coherentes con el nuevo contrato |
+
+---
+
+## Reglas específicas para RPC / Supabase
+
+- **Evitar function overloading ambiguo** en RPC (PostgREST no lo maneja bien).
+- Si cambia la firma de una función RPC, eliminar la versión anterior con `DROP FUNCTION IF EXISTS (firma_exacta)`.
+- Ver detalle de firma y verificación de `nearby_colegios` en `data-supabase.mdc`.
+- Para filtros `text[]` (arrays): usar `= ANY(array_param)` en SQL y `putJsonArray` en Kotlin.
+- No enviar strings vacíos a la RPC; usar `null` o no incluir el parámetro.
+
+---
+
+## Checklist de prueba mínimo para cambios de filtros
+
+Cuando se cambie la lógica de filtros (BD o cliente), verificar:
+
+- [ ] Sin filtros → carga normal
+- [ ] Una selección concreta → filtro activo en servidor
+- [ ] Multiselección del mismo grupo → filtro activo en servidor
+- [ ] TODOS en un grupo → sin restricción para ese grupo
+- [ ] Filtros en ambos grupos → AND en servidor
+- [ ] Long press en mapa → recarga con filtros actuales
+- [ ] Búsqueda de dirección → recarga con filtros actuales y `puntoReferencia` actualizado
+- [ ] Búsqueda por nombre de colegio → sugerencias de BD + selección centra mapa
+- [ ] Cambio de filtro tras búsqueda → usa `puntoReferencia` de la búsqueda, no `userLocation`
+- [ ] Apertura de detalle de colegio → card intacta

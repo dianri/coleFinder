@@ -19,16 +19,32 @@ data class NearbyColegioDto(
     @SerialName("descripcion_entidad")     val descripcionEntidad: String? = null,
     @SerialName("tipo_centro_normalizado") val tipoCentroNormalizado: String? = null,
     @SerialName("titularidad_normalizada") val titularidadNormalizada: String? = null,
+    @SerialName("es_dificil_desempeno")    val esDificilDesempeno: Boolean = false,
+    @SerialName("jornada_tipo")            val jornadaTipo: String = "desconocida",
+    @SerialName("es_rural")                val esRural: Boolean = false,
     @SerialName("distancia_metros")        val distanciaMetros: Double
 ) {
-    fun toColegio() = Colegio(
-        id        = id,
-        nombre    = nombre,
-        direccion = direccion ?: "",
-        latitud   = latitud,
-        longitud  = longitud,
-        tipo      = tipo ?: "",
-        localidad = localidad ?: "",
-        telefono  = telefono
-    )
+    fun toColegio(): Colegio {
+        return Colegio(
+            id = id,
+            nombre = nombre,
+            direccion = direccion ?: "",
+            localidad = localidad ?: "",
+            tipo = tipo ?: "",
+            latitud = latitud,
+            longitud = longitud,
+            telefono = telefono,
+            esDificilDesempeno = esDificilDesempeno,
+            esRural = esRural,
+            jornadaTipo = parseJornadaTipo(jornadaTipo)
+        )
+    }
+
+    private fun parseJornadaTipo(value: String): JornadaTipo {
+        return when (value.lowercase()) {
+            "continua" -> JornadaTipo.CONTINUA
+            "partida" -> JornadaTipo.PARTIDA
+            else -> JornadaTipo.DESCONOCIDA
+        }
+    }
 }

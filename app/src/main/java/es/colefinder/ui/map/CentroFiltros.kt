@@ -1,6 +1,11 @@
 package es.colefinder.ui.map
 
 import androidx.compose.ui.graphics.Color
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import androidx.compose.runtime.Composable
+import androidx.compose.foundation.isSystemInDarkTheme
 
 // ── Titularidad ───────────────────────────────────────────────────────────────
 
@@ -10,12 +15,16 @@ enum class TitularidadFiltro(val label: String) {
     CONCERTADO("Concertado"),
     PRIVADO("Privado");
 
-    /** Valor para el parámetro p_filtro_tipo de la RPC; null = sin restricción. */
+    /**
+     * Valor para el parámetro p_titularidad de la RPC.
+     * Debe coincidir exactamente con titularidad_normalizada en BD: PUBLICO, CONCERTADO, PRIVADO.
+     * Devuelve null when no hay restricción (TODOS).
+     */
     fun toRpcParam(): String? = when (this) {
         TODOS      -> null
-        PUBLICO    -> "Público"
-        CONCERTADO -> "Concertado"
-        PRIVADO    -> "Privado"
+        PUBLICO    -> "PUBLICO"
+        CONCERTADO -> "CONCERTADO"
+        PRIVADO    -> "PRIVADO"
     }
 }
 
@@ -28,10 +37,35 @@ enum class TipoCentroFiltro(val label: String) {
     FP("FP"),
     ADULTOS("Adultos"),
     ESPECIAL("Especial"),
-    OTROS("Otros")
+    OTROS("Otros");
+
+    /**
+     * Valor para el parámetro p_tipo de la RPC.
+     * Debe coincidir exactamente con tipo_centro_normalizado en BD.
+     * Devuelve null when no hay restricción (TODOS).
+     */
+    fun toRpcParam(): String? = when (this) {
+        TODOS      -> null
+        PRIMARIA   -> "PRIMARIA"
+        SECUNDARIA -> "SECUNDARIA"
+        FP         -> "FP"
+        ADULTOS    -> "ADULTOS"
+        ESPECIAL   -> "ESPECIAL"
+        OTROS      -> "OTROS"
+    }
 }
 
 enum class TipoCentroClasificado { PRIMARIA, SECUNDARIA, FP, ADULTOS, ESPECIAL, OTROS }
+
+/** Etiqueta legible para mostrar en la card de detalle. */
+val TipoCentroClasificado.label: String get() = when (this) {
+    TipoCentroClasificado.PRIMARIA   -> "Primaria"
+    TipoCentroClasificado.SECUNDARIA -> "Secundaria"
+    TipoCentroClasificado.FP         -> "FP"
+    TipoCentroClasificado.ADULTOS    -> "Adultos"
+    TipoCentroClasificado.ESPECIAL   -> "Especial"
+    TipoCentroClasificado.OTROS      -> "Otros"
+}
 
 /**
  * Convierte el valor normalizado de BD (tipo_centro_normalizado) al enum local.
@@ -171,6 +205,30 @@ fun matchesTitularidadNormalizadaFiltros(
 // ── Lógica de toggle para multiselección ─────────────────────────────────────
 
 /**
+ * Genera el array JSON para el parámetro p_titularidades de la RPC.
+ * Si el set contiene TODOS o está vacío, devuelve null (sin restricción en BD).
+ * Si tiene opciones concretas, devuelve un JsonArray con sus valores normalizados.
+ */
+@JvmName("titularidadToRpcArray")
+fun Set<TitularidadFiltro>.toRpcArray(): JsonArray? {
+    val concretos = this.filter { it != TitularidadFiltro.TODOS }
+    if (concretos.isEmpty()) return null
+    return buildJsonArray { concretos.forEach { add(it.toRpcParam()!!) } }
+}
+
+/**
+ * Genera el array JSON para el parámetro p_tipos de la RPC.
+ * Si el set contiene TODOS o está vacío, devuelve null (sin restricción en BD).
+ * Si tiene opciones concretas, devuelve un JsonArray con sus valores normalizados.
+ */
+@JvmName("tipoCentroToRpcArray")
+fun Set<TipoCentroFiltro>.toRpcArray(): JsonArray? {
+    val concretos = this.filter { it != TipoCentroFiltro.TODOS }
+    if (concretos.isEmpty()) return null
+    return buildJsonArray { concretos.forEach { add(it.toRpcParam()!!) } }
+}
+
+/**
  * Reglas de toggle:
  * - Si se pulsa TODOS → activa solo TODOS.
  * - Si TODOS está activo y se pulsa otro → activa solo ese.
@@ -208,6 +266,26 @@ val ColorChipAdultos    = Color(0xFF6A1B9A) // púrpura
 val ColorChipEspecial   = Color(0xFFBF360C) // naranja quemado
 val ColorChipOtros      = Color(0xFF757575) // gris
 
+@Composable
+fun colorFondoDestacado(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF332020) // Fondo oscuro muy sutil, ligeramente granate
+    else Color(0xFFFFEBEE)
+
+@Composable
+fun colorFondoChipDestacado(): Color =
+    if (isSystemInDarkTheme()) Color(0xFF4A2A2A) // Un poco más de contraste para el chip
+    else Color(0xFFFFCDD2)
+
+@Composable
+fun colorTextoRural(): Color =
+    if (isSystemInDarkTheme()) Color(0xFFA5D6A7) // Verde pastel brillante para dark mode
+    else Color(0xFF1B5E20)
+
+@Composable
+fun colorTextoDificil(): Color =
+    if (isSystemInDarkTheme()) Color(0xFFEF9A9A) // Rojo suave brillante para dark mode
+    else Color(0xFFB71C1C)
+
 /**
  * Color de marcador/badge.
  * Usa titularidadNormalizada de BD como fuente preferente; cae a tipo (texto libre) si es nulo.
@@ -224,6 +302,25 @@ fun colorParaTitularidad(tipo: String, titularidadNormalizada: String? = null): 
         else                                           -> ColorConcertado
     }
 }
+
+/** Color del chip de tipo para la card de detalle. Reutiliza colorParaTipoCentroFiltro. */
+fun colorParaTipoCentroClasificado(tipo: TipoCentroClasificado): Color = when (tipo) {
+    TipoCentroClasificado.PRIMARIA   -> ColorChipPrimaria
+    TipoCentroClasificado.SECUNDARIA -> ColorChipSecundaria
+    TipoCentroClasificado.FP         -> ColorChipFP
+    TipoCentroClasificado.ADULTOS    -> ColorChipAdultos
+    TipoCentroClasificado.ESPECIAL   -> ColorChipEspecial
+    TipoCentroClasificado.OTROS      -> ColorChipOtros
+}
+
+/** Etiqueta de titularidad legible a partir del campo normalizado de BD o del tipo libre. */
+fun labelParaTitularidad(titularidadNormalizada: String?, tipoRaw: String): String =
+    when (titularidadNormalizada?.uppercase()) {
+        "PUBLICO"    -> "Público"
+        "CONCERTADO" -> "Concertado"
+        "PRIVADO"    -> "Privado"
+        else         -> tipoRaw.ifBlank { "Desconocido" }
+    }
 
 fun colorParaTitularidadFiltro(filtro: TitularidadFiltro): Color = when (filtro) {
     TitularidadFiltro.TODOS      -> ColorFiltroTodos

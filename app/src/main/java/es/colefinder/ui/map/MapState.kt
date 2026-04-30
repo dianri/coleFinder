@@ -4,6 +4,9 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.CameraPositionState
 import es.colefinder.data.model.Colegio
+import com.google.android.gms.maps.model.LatLngBounds
+
+enum class FocusedRequestType { NONE, MY_LOCATION, POINT, SEARCH }
 
 data class MapState(
     val isLoading: Boolean = false,
@@ -12,14 +15,25 @@ data class MapState(
     val error: String? = null,
     val userLocation: LatLng? = null,
     val puntoReferencia: LatLng? = null,
-    val selectedColegio: Colegio? = null,
+    // Selección completa para que la card de detalle tenga distancia, tipo y titularidad normalizada.
+    val selectedColegioConDistancia: ColegioConDistancia? = null,
     // Sets vacíos no son válidos: siempre contienen al menos TODOS u opciones concretas.
     val filtrosTitularidad: Set<TitularidadFiltro> = setOf(TitularidadFiltro.TODOS),
     val filtrosTipoCentro: Set<TipoCentroFiltro> = setOf(TipoCentroFiltro.TODOS),
+    // Favoritos en memoria (persistencia con Room es roadmap).
+    val favoritosIds: Set<Int> = emptySet(),
     val cameraPosition: CameraPositionState = CameraPositionState(
         position = CameraPosition.fromLatLngZoom(LatLng(40.4168, -3.7038), 6f)
-    )
+    ),
+    val showLongPressHint: Boolean = false,
+    val hasDiscoveredLongPress: Boolean = false,
+    val longPressHintCount: Int = 0,
+    val focusedRequestType: FocusedRequestType = FocusedRequestType.NONE,
+    val showRemoteResultsWarning: Boolean = false
 ) {
+    /** Acceso directo al Colegio seleccionado para compatibilidad interna. */
+    val selectedColegio: Colegio? get() = selectedColegioConDistancia?.colegio
+
     /**
      * Lista final para marcadores y panel lateral.
      * Usa titularidadNormalizada (BD) cuando está disponible; fallback a tipo (texto libre).
@@ -38,7 +52,9 @@ data class MapState(
 data class SearchSuggestion(
     val title: String,
     val subtitle: String,
-    val latLng: LatLng
+    val latLng: LatLng,
+    /** Non-null cuando la sugerencia es un centro de nuestra BD (no una ubicacion de Geocoder). */
+    val colegioId: Int? = null
 )
 
 data class ColegioConDistancia(
