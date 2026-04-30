@@ -127,12 +127,13 @@ Contrato para acceso a datos de centros. Ver detalles en `architecture.mdc`.
 
 ### `SupabaseColegioRepository` (`data/repository/`, `@Singleton`)
 Implementación sobre Supabase. Responsabilidades:
-- Construir el `JsonObject` con los parámetros de la RPC.
-- Llamar a la RPC con el schema correcto (`BuildConfig.SUPABASE_SCHEMA`).
-- Aplicar `.distinctBy { it.id }` tras recibir la respuesta.
-- Mapear `List<NearbyColegioDto>` → `List<ColegioConDistancia>` usando
-  `dto.toColegio()` y `clasificarTipoCentro(...)`.
-- Devolver `Result.success` o `Result.failure` — nunca lanza excepciones.
+- **`fetchNearbyColegios`**: construir `JsonObject` con parámetros, llamar a la RPC con el schema correcto,
+  aplicar `.distinctBy { it.id }`, mapear `NearbyColegioDto` → `ColegioConDistancia`.
+  Errores se clasifican con `classifyColegiosLoadFailure()` y se devuelven como
+  `Result.failure(ColegiosLoadException(...))` con categoría y mensaje de usuario.
+- **`searchColegiosByName`**: consulta PostgREST directa (`from(schema, "colegios").select { ilike("nombre", ...) }`),
+  devuelve `List<ColegioSearchDto>` (DTO ligero). Errores silenciosos (`Result.failure` sin clasificación detallada).
+- Ambos métodos ejecutan en `Dispatchers.IO` y respetan `CancellationException` (rethrow).
 
 ### `UserPreferencesRepository` (`data/repository/`, `@Singleton`)
 Persiste preferencias de UI mediante **DataStore Preferences**:
@@ -171,6 +172,18 @@ enum class JornadaTipo(val label: String) {
 }
 ```
 
+### `ColegioSearchDto` (DTO de búsqueda por nombre — `data/model/ColegioSearchDto.kt`)
+```kotlin
+@Serializable
+data class ColegioSearchDto(
+    val id: Int,
+    val nombre: String,
+    val localidad: String? = null,
+    val latitud: Double,
+    val longitud: Double
+)
+```
+
 ### `NearbyColegioDto` (DTO de RPC — `data/model/NearbyColegioDto.kt`)
 ```kotlin
 @Serializable
@@ -201,6 +214,23 @@ data class NearbyColegioDto(
 - Usar `Geocoder` nativo siempre que sea razonable.
 - Priorizar soluciones gratuitas frente a APIs externas de pago.
 - Mantener debounce de 300ms para autocompletado de direcciones.
+
+## Clasificación de errores de red (`data/network/ColegiosLoadError.kt`)
+
+Los errores de `fetchNearbyColegios` se clasifican en `ColegiosLoadCategory`:
+`DNS`, `TIMEOUT`, `SSL`, `CONNECTION_REFUSED`, `HTTP_CLIENT`, `HTTP_SERVER`, `NETWORK_GENERIC`, `UNKNOWN`.
+
+- `classifyColegiosLoadFailure(throwable)` recorre la cadena de `cause` y usa heurísticas de mensaje
+  para `HttpRequestException` de supabase-kt (que no encadena `cause`).
+- `ColegiosLoadException` transporta `category`, `userMessage` y `cause` original en `Result.failure`.
+- El ViewModel extrae `userMessage` para la UI; Logcat registra `[CATEGORÍA] technicalDetail`.
+
+## Cliente Supabase (`data/Supabase.kt`)
+
+- `requestTimeout = 25.seconds` (propiedad del builder de supabase-kt → `HttpTimeout.requestTimeoutMillis` en Ktor).
+  Por defecto del SDK era 10s; subido para redes móviles lentas.
+- `defaultLogLevel = DEBUG` solo en builds debug.
+- `defaultSchema = BuildConfig.SUPABASE_SCHEMA` en Postgrest.
 
 ## Rendimiento y arquitectura de datos
 - Evitar cálculos pesados en el Main Thread.

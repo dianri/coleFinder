@@ -127,7 +127,9 @@ Gestiona toda la UI del mapa en una sola composable. Incluye:
   usa `FusedLocationProviderClient.lastLocation` con fallback a `getCurrentLocation(HIGH_ACCURACY)`.
 - `AnchoredDraggableState<MapSheetValue>` con anchors dinámicos calculados en `SideEffect`.
 - `NestedScrollConnection` custom para coordinar scroll de lista interna y arrastre del sheet.
-- `LaunchedEffect` para: arranque/permisos, hint, movimiento de cámara, auto-encuadre, aviso lejanos.
+- `LaunchedEffect` para: arranque/permisos, hint, movimiento de cámara, auto-encuadre, aviso lejanos, **error Toast único**.
+- **Toast de error**: `LaunchedEffect(state.error)` muestra un `Toast` y llama a `viewModel.clearError()`.
+  **No** se muestra Toast directamente en el cuerpo del composable (evita repeticiones por recomposición).
 
 ### `MapSheetValue` (enum en `MapScreen.kt`)
 ```kotlin
@@ -183,12 +185,23 @@ private fun <T> FiltroChipRow(
 - Numerados con `createNumberedMarkerBitmap(context, numberLabel, markerColor)`.
 - Usan `key(colegio.id)` para composición estable.
 
+### Búsqueda híbrida (SearchBar)
+La `SearchBar` soporta dos tipos de sugerencia:
+- **Colegio** (`suggestion.colegioId != null`): icono `Icons.Default.School`.
+- **Ubicación** (`suggestion.colegioId == null`): icono `Icons.Default.LocationOn`.
+
+Al seleccionar una sugerencia de colegio, el mapa se centra, se fija `puntoReferencia`,
+se cargan centros cercanos y se auto-selecciona el centro (si aparece en los 50 resultados).
+
 ### `ColegioDetailCard` (implementado)
 Aparece como overlay en `Alignment.BottomCenter` con `zIndex(2f)` y `padding(bottom = 80.dp)`.
 Estructura actual:
 - **Cabecera**: nombre (máx. 2 líneas) + botón favorito + botón cerrar.
-- **Chips informativos** (fila horizontal scrollable, no interactivos):
-  titularidad (`InfoChip`), tipo de centro (`InfoChip`), distancia (`InfoChip`).
+- **Chips informativos** (fila 1, horizontal scrollable, no interactivos):
+  titularidad (`InfoChip`), tipo de centro (`InfoChip`), distancia (`InfoChip`),
+  localidad (si no vacía), jornada (si no DESCONOCIDA).
+- **Chips extra** (fila 2, solo si aplica): "Rural" (verde, `colorTextoRural`),
+  "Difícil desempeño" (rojo, `colorTextoDificil`), con fondo `colorFondoDestacado`.
 - **Dirección**: icono + dirección en dos líneas (dirección y localidad).
 - **Teléfono**: icono + número (solo si `telefono != null`).
 - **Acciones**:
@@ -216,15 +229,6 @@ El icono corazón en `ColegioDetailCard` refleja `colegioId in state.favoritosId
 
 > Estas funcionalidades están descritas en las reglas como objetivo futuro.
 > **No asumas que existen en el código hasta que se implemente.**
-
-### `ColegioDetailCard` — chips de metadatos adicionales
-Los campos `esDificilDesempeno`, `esRural` y `jornadaTipo` ya llegan en el modelo `Colegio`
-y **se muestran en la lista del sheet**, pero **aún no aparecen en la card de detalle**.
-
-Diseño planificado para la card:
-- Fila 2 de chips: "Difícil desempeño" (rojo, `colorTextoDificil`) y/o "Rural" (verde, `colorTextoRural`),
-  solo si aplican, con fondo `colorFondoChipDestacado`.
-- Chip de jornada en fila 1 (junto a titularidad/tipo/distancia), solo si `jornadaTipo != DESCONOCIDA`.
 
 ### Favoritos persistentes
 Guardar `favoritosIds` en Room cuando se implemente la capa de persistencia local.

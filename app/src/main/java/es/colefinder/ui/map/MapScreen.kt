@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Surface
 import androidx.compose.ui.text.style.TextOverflow
@@ -650,10 +651,16 @@ fun MapScreen(
             LazyColumn {
                 items(state.suggestions.size) { index ->
                     val suggestion = state.suggestions[index]
+                    val isColegio = suggestion.colegioId != null
                     ListItem(
                         headlineContent = { Text(suggestion.title) },
                         supportingContent = { Text(suggestion.subtitle) },
-                        leadingContent = { Icon(Icons.Default.LocationOn, contentDescription = null) },
+                        leadingContent = {
+                            Icon(
+                                if (isColegio) Icons.Default.School else Icons.Default.LocationOn,
+                                contentDescription = null
+                            )
+                        },
                         modifier = Modifier.clickable {
                             searchQuery = suggestion.title
                             searchActive = false

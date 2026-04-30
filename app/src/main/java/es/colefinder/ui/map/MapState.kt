@@ -52,7 +52,9 @@ data class MapState(
 data class SearchSuggestion(
     val title: String,
     val subtitle: String,
-    val latLng: LatLng
+    val latLng: LatLng,
+    /** Non-null cuando la sugerencia es un centro de nuestra BD (no una ubicacion de Geocoder). */
+    val colegioId: Int? = null
 )
 
 data class ColegioConDistancia(
