@@ -16,6 +16,7 @@ Para cualquier tarea de implementación, seguir siempre este orden:
 4. **`git diff`** — verificar que no se ha tocado nada fuera del alcance.
 5. **Compilación** — validar que el código compila antes de declarar éxito.
 6. **Resultado final** — resumen de archivos modificados, riesgos y checklist de prueba.
+7. **Antes de `git commit`** (si el usuario pide commit o el agente va a commitear) — aplicar la sección **«Revisión de reglas Cursor antes de commit»** más abajo.
 
 Si algo falla en cualquier paso, iterar en vez de declarar éxito prematuramente.
 
@@ -33,10 +34,25 @@ git diff
 # Además, si el cambio afecta a: recursos, navegación, build config,
 # serialización, múltiples módulos, o integración app↔backend:
 ./gradlew :app:assemblePreDebug :app:assembleProdDebug
+
+# Si se toca buildTypes.release, proguard-rules.pro o reglas R8 relevantes:
+./gradlew :app:assembleProdRelease
 ```
 
 - Si la compilación falla: analizar el error, corregirlo, recompilar.
 - **No cerrar una tarea como "completada" sin validación de compilación.**
+
+### Tests unitarios JVM (`src/test`)
+
+Tras cambios en `MapViewModel`, `MapState`, `CentroFiltros`, `SupabaseColegioRepository`, DTOs de red o archivos bajo `app/src/test/`:
+
+```bash
+./gradlew :app:compilePreDebugUnitTestKotlin :app:compileProdDebugUnitTestKotlin
+./gradlew :app:testPreDebugUnitTest :app:testProdDebugUnitTest
+```
+
+- Los flavors **pre** y **prod** tienen cada uno su `test*DebugUnitTest`; conviene ejecutar ambos si el cambio es transversal.
+- En `app/build.gradle.kts`, `testOptions { unitTests.isReturnDefaultValues = true }` evita fallos en JVM cuando el código de producción llama a APIs Android stub (p. ej. `Log` en el manejo de errores del ViewModel).
 
 ---
 
@@ -60,6 +76,17 @@ Después de editar archivos, proporcionar siempre:
 | `git diff` limpio | Sin cambios fuera del alcance |
 
 Si se detectan cambios accidentales fuera del alcance, parar y avisar al usuario.
+
+---
+
+## Revisión de reglas Cursor antes de commit
+
+Cada vez que se vaya a **realizar un commit** (por petición explícita del usuario o como cierre de una tarea con cambios versionables):
+
+1. **Revisar** si el diff / el alcance de la tarea hace necesario u opcional pero recomendable actualizar los archivos bajo `.cursor/rules/` (`architecture.mdc`, `workflow.mdc`, `data-supabase.mdc`, `ui-compose.mdc`, etc.). Criterios orientativos: nueva arquitectura o archivos clave, tests o convenciones nuevas, cambios en Supabase/RPC/DTOs, Gradle (flavors, release, ProGuard), flujos del agente o checklist que hayan quedado desactualizados.
+2. Si **no** aplica ninguna actualización: decirlo en una frase clara (p. ej. «Reglas `.cursor/rules/`: sin cambios necesarios») y proceder con el commit si corresponde.
+3. Si **sí** aplica: **proponer** al usuario las ediciones concretas (contenido o diff de los `.mdc` afectados) o aplicarlas en el workspace como cambios revisables, para que el usuario las **acepte o rechace** en Cursor. No omitir este paso ni asumir en silencio que las reglas siguen al día.
+4. **Orden sugerido:** primero la revisión y la propuesta de reglas (si hay algo que contar); el usuario puede aceptar reglas y código en el mismo batch o pedir commits separados. El agente no debe presentar un commit como “cerrado” sin haber hecho al menos la comprobación del punto 1 y haber comunicado el resultado (2 o 3).
 
 ---
 
@@ -106,3 +133,137 @@ Cuando se cambie la lógica de filtros (BD o cliente), verificar:
 - [ ] Búsqueda por nombre de colegio → sugerencias de BD + selección centra mapa
 - [ ] Cambio de filtro tras búsqueda → usa `puntoReferencia` de la búsqueda, no `userLocation`
 - [ ] Apertura de detalle de colegio → card intacta
+
+---
+
+## Reglas de tests unitarios
+
+### Cuándo crear tests nuevos
+
+| Código tocado | Test obligatorio |
+|:---|:---|
+| Nueva función en `CentroFiltros.kt` | Test en `CentroFiltrosTest.kt` |
+| Nuevo método en `MapViewModel.kt` | Test en `MapViewModelTest.kt` |
+| Nueva propiedad computada en `MapState.kt` | Test en `MapStateTest.kt` |
+| Nuevo método en `SupabaseColegioRepository.kt` (o cambio de contrato RPC/select) | Test en `ColegioRepositoryTest.kt` (y revisar integración SQL si aplica) |
+| Nuevo repositorio o caso de uso de lógica pura | Test en su propio `*Test.kt` equivalente |
+
+No crear tests para: `@Composable`, funciones de color/label UI, métodos que usen `CameraUpdateFactory`, `Geocoder` o `cameraPosition.animate` (esos son tests instrumentados, fuera del scope de unit tests JVM).
+
+### Flujo obligatorio al añadir funcionalidad
+
+1. Escribir el código de producción.
+2. Escribir los tests que cubran la lógica nueva (Given/When/Then).
+3. Ejecutar todos los tests existentes para verificar que nada se rompió:
+   ```bash
+   ./gradlew :app:testPreDebugUnitTest :app:testProdDebugUnitTest
+   ```
+4. Solo hacer commit si todos los tests pasan.
+
+### Flujo obligatorio al modificar código existente
+
+1. Identificar qué tests cubren el código que se va a tocar.
+2. Hacer el cambio mínimo necesario.
+3. Ejecutar los tests:
+   ```bash
+   ./gradlew :app:testPreDebugUnitTest
+   ```
+4. Si un test falla → dos opciones:
+   - Corregir el código si el comportamiento esperado no debía cambiar.
+   - Actualizar el test con un comentario explicando por qué cambió el comportamiento.
+5. **Nunca borrar un test existente sin justificación explícita.**
+
+### Cobertura mínima exigida
+
+- `CentroFiltros.kt` — toda función de lógica pura (clasificación, toggle, matching, toRpcArray).
+- `MapViewModel.kt` — todo método público que no dependa de APIs Android.
+- `MapState.kt` — toda propiedad computada.
+- `SupabaseColegioRepository.kt` — rutas felices y errores representativos vía `ColegioRepositoryTest` (mock HTTP).
+
+### Ver cobertura real con Jacoco
+
+Para generar el informe HTML local y ver el % exacto:
+
+```bash
+# Informe solo del flavor pre (más rápido)
+./gradlew :app:testPreDebugUnitTest :app:jacocoPreDebugUnitTestReport
+
+# Abrir el informe en el navegador (Mac)
+open app/build/reports/jacoco/jacocoPreDebugUnitTestReport/html/index.html
+
+# Informe unificado pre+prod
+./gradlew :app:jacocoFullReport
+open app/build/reports/jacoco/jacocoFullReport/html/index.html
+```
+
+El umbral mínimo de cobertura de lógica de negocio es 88%.
+No bajar de este valor. Las clases excluidas del conteo son:
+Hilt generados, Composables, ui/theme, R, BuildConfig y serializers.
+
+### Estructura y estilo de los tests
+
+- Patrón Given/When/Then en cada test (comentarios `// Given`, `// When`, `// Then`).
+- Nombre de test: `nombreFuncion_condicion_resultadoEsperado`.
+- **ViewModel** (`MapViewModelTest`): aislar con MockK o un fake mínimo del contrato `ColegioRepository` cuando baste con controlar `Result` (p. ej. fallos deterministas).
+- **Repositorio real** (`SupabaseColegioRepository`): preferir `ColegioRepositoryTest` con `MockEngine` (Ktor) y JSON alineado a los DTO, no sustituir la implementación por un fake salvo test de contrato aislado.
+- `MainDispatcherRule` obligatorio en todos los tests de ViewModel.
+- Tests de lógica pura sin ningún mock: solo datos y asserts.
+
+---
+
+## Reglas de CHANGELOG y versionado
+
+### Cuándo actualizar el CHANGELOG.md
+
+El fichero CHANGELOG.md en la raíz del proyecto DEBE actualizarse
+como parte del mismo commit que introduce el cambio. No dejar el
+changelog para después.
+
+| Tipo de cambio | Sección en CHANGELOG |
+|:---|:---|
+| Nueva funcionalidad visible para el usuario | `### Added` bajo `[Unreleased]` |
+| Cambio en comportamiento existente | `### Changed` bajo `[Unreleased]` |
+| Eliminación de algo que existía | `### Removed` bajo `[Unreleased]` |
+| Corrección de un bug | `### Fixed` bajo `[Unreleased]` |
+| Mejora técnica interna sin cambio de comportamiento | `### Changed` bajo `[Unreleased]` con nota "(interno)" |
+
+### Qué NO incluir en el CHANGELOG
+
+- Cambios en tests (salvo que se añada una suite completa nueva).
+- Cambios en ficheros de configuración de Cursor o `.cursor/rules/`.
+- Refactors de nombre de variable sin impacto funcional.
+- Actualizaciones de dependencias menores sin impacto visible.
+
+### Cuándo hacer una release (mover Unreleased a versión)
+
+Una release ocurre cuando se va a distribuir la app (merge a main
+con intención de publicar). En ese momento:
+
+1. Cambiar `## [Unreleased]` por `## [X.Y.Z] - YYYY-MM-DD` con la
+   fecha real del día.
+2. Añadir un nuevo bloque `## [Unreleased]` vacío encima.
+3. Incrementar versionCode en +1 en app/build.gradle.kts.
+4. Actualizar versionName a "X.Y.Z" en app/build.gradle.kts
+   (y la val appVersionName si se usa esa variante).
+5. Hacer commit con mensaje: `chore: release vX.Y.Z`.
+
+### Política de versionado semántico
+
+- **MAJOR** (X.0.0): cambio incompatible de contrato Supabase,
+  rediseño de pantalla principal o cambio de applicationId.
+- **MINOR** (1.X.0): nueva funcionalidad para el usuario
+  (nueva pantalla, nuevo filtro, nueva acción).
+- **PATCH** (1.0.X): bugfix, mejora de rendimiento,
+  ajuste visual menor.
+
+### Nombres de APK generados
+
+Los APKs siguen el patrón definido en build.gradle.kts:
+- PRE:  `colefinder-pre-{versionName}-debug.apk`
+- PROD: `colefinder-prod-{versionName}-release.apk`
+
+El flavor PRE no lleva suffix en versionName — el prefijo del
+fichero ya identifica el flavor. Al subir versionName los APKs
+reflejan la versión automáticamente sin ningún cambio adicional.
+
+### Ejemplo de entrada correcta en CHANGELOG

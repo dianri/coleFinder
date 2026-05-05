@@ -232,6 +232,11 @@ Los errores de `fetchNearbyColegios` se clasifican en `ColegiosLoadCategory`:
 - `defaultLogLevel = DEBUG` solo en builds debug.
 - `defaultSchema = BuildConfig.SUPABASE_SCHEMA` en Postgrest.
 
+## Tests unitarios relacionados
+
+- `app/src/test/java/es/colefinder/data/SupabaseHeaderTest.kt`: comprueba que una llamada `rpc` con `schema` (p. ej. `staging`) envía las cabeceras de perfil esperadas en la petición Ktor mock (`Content-Profile` / `Accept-Profile`).
+- `app/src/test/java/es/colefinder/data/ColegioRepositoryTest.kt`: ejercita `SupabaseColegioRepository` con `MockEngine` — respuestas JSON de `nearby_colegios` y de `from("colegios")` / búsqueda, lista vacía, error de red e HTTP 500.
+
 ## Rendimiento y arquitectura de datos
 - Evitar cálculos pesados en el Main Thread.
 - Manejar errores de red con cuidado (devolver `Result.failure`).
