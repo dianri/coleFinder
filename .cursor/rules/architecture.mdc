@@ -198,6 +198,29 @@ data class ColegioConDistancia(
 
 ---
 
+## Tests unitarios JVM (`app/src/test`)
+
+Stack habitual: **JUnit 4**, **MockK** (`coEvery` / `coVerify` para suspend), **kotlinx-coroutines-test** (`runTest`, `StandardTestDispatcher` vía regla), **Turbine** (`state.test { }` sobre el `StateFlow` del ViewModel).
+
+| Archivo | Rol |
+|---|---|
+| `es/colefinder/test/MainDispatcherRule.kt` | `@get:Rule` que sustituye `Dispatchers.Main` por un `TestDispatcher` (`StandardTestDispatcher()`). |
+| `es/colefinder/ui/map/MapViewModelTest.kt` | ViewModel: favoritos, filtros + verificación de `fetchNearbyColegios`, errores, long click, selección, carga, `consumeFocusedRequest`. |
+| `es/colefinder/ui/map/MapStateTest.kt` | Getter `MapState.colegiosConDistancia` (filtros titularidad/tipo, AND, vacío, fallback texto libre). |
+| `es/colefinder/ui/map/CentroFiltrosTest.kt` | Clasificación de tipo, toggles de filtros, helpers RPC, matching de titularidad. |
+| `es/colefinder/data/SupabaseHeaderTest.kt` | Smoke de cabeceras de esquema en RPC vía cliente Ktor mock. |
+
+Convenciones útiles en `MapViewModelTest`:
+
+- Stub de `fetchNearbyColegios` con **tercer argumento explícito `50`** (`limit` por defecto del ViewModel/repositorio) para que MockK coincida con la firma real.
+- `UserPreferencesRepository`: `every { userPreferencesFlow } returns MutableStateFlow(UserPreferences(...))`.
+- Para forzar `Result.failure` en carga cercana sin depender de stubs frágiles, usar una **implementación mínima** de `ColegioRepository` de prueba que devuelva el `Result` deseado.
+- Tras tests que disparan trabajo asíncrono del ViewModel (p. ej. animación de cámara en `onColegioClick`), llamar a **`cancelForTest()`** (cancelación del `viewModelScope`) para evitar efectos colaterales al drenar la cola del test.
+
+No existe plantilla `ExampleUnitTest`; la cobertura relevante está en los archivos anteriores.
+
+---
+
 ## Deduplicación obligatoria
 - Antes de actualizar el estado con listas de colegios, aplicar siempre:
   - `.distinctBy { it.id }`

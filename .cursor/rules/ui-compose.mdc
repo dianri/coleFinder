@@ -49,6 +49,8 @@ El getter `MapState.colegiosConDistancia` aplica ambos grupos en cliente como **
 - Usa `tipoCentroClasificado: TipoCentroClasificado` (derivado de BD + fallback cliente).
 - Un centro pasa si cumple **ambos** grupos simultáneamente.
 
+**Tests:** `MapStateTest` cubre el getter `colegiosConDistancia` (TODOS, filtros por titularidad/tipo, combinación AND, lista vacía, fallback a `Colegio.tipo` cuando `titularidadNormalizada` es null). La clasificación y toggles están en `CentroFiltrosTest`; el flujo del ViewModel con recarga RPC en `MapViewModelTest`.
+
 ---
 
 ## Clasificación de tipo de centro (`CentroFiltros.kt`)

@@ -38,6 +38,18 @@ git diff
 - Si la compilación falla: analizar el error, corregirlo, recompilar.
 - **No cerrar una tarea como "completada" sin validación de compilación.**
 
+### Tests unitarios JVM (`src/test`)
+
+Tras cambios en `MapViewModel`, `MapState`, `CentroFiltros`, repositorio Supabase de prueba o archivos bajo `app/src/test/`:
+
+```bash
+./gradlew :app:compilePreDebugUnitTestKotlin :app:compileProdDebugUnitTestKotlin
+./gradlew :app:testPreDebugUnitTest :app:testProdDebugUnitTest
+```
+
+- Los flavors **pre** y **prod** tienen cada uno su `test*DebugUnitTest`; conviene ejecutar ambos si el cambio es transversal.
+- En `app/build.gradle.kts`, `testOptions { unitTests.isReturnDefaultValues = true }` evita fallos en JVM cuando el código de producción llama a APIs Android stub (p. ej. `Log` en el manejo de errores del ViewModel).
+
 ---
 
 ## Filosofía de cambios
