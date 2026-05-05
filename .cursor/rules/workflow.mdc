@@ -16,6 +16,7 @@ Para cualquier tarea de implementación, seguir siempre este orden:
 4. **`git diff`** — verificar que no se ha tocado nada fuera del alcance.
 5. **Compilación** — validar que el código compila antes de declarar éxito.
 6. **Resultado final** — resumen de archivos modificados, riesgos y checklist de prueba.
+7. **Antes de `git commit`** (si el usuario pide commit o el agente va a commitear) — aplicar la sección **«Revisión de reglas Cursor antes de commit»** más abajo.
 
 Si algo falla en cualquier paso, iterar en vez de declarar éxito prematuramente.
 
@@ -33,6 +34,9 @@ git diff
 # Además, si el cambio afecta a: recursos, navegación, build config,
 # serialización, múltiples módulos, o integración app↔backend:
 ./gradlew :app:assemblePreDebug :app:assembleProdDebug
+
+# Si se toca buildTypes.release, proguard-rules.pro o reglas R8 relevantes:
+./gradlew :app:assembleProdRelease
 ```
 
 - Si la compilación falla: analizar el error, corregirlo, recompilar.
@@ -40,7 +44,7 @@ git diff
 
 ### Tests unitarios JVM (`src/test`)
 
-Tras cambios en `MapViewModel`, `MapState`, `CentroFiltros`, repositorio Supabase de prueba o archivos bajo `app/src/test/`:
+Tras cambios en `MapViewModel`, `MapState`, `CentroFiltros`, `SupabaseColegioRepository`, DTOs de red o archivos bajo `app/src/test/`:
 
 ```bash
 ./gradlew :app:compilePreDebugUnitTestKotlin :app:compileProdDebugUnitTestKotlin
@@ -72,6 +76,17 @@ Después de editar archivos, proporcionar siempre:
 | `git diff` limpio | Sin cambios fuera del alcance |
 
 Si se detectan cambios accidentales fuera del alcance, parar y avisar al usuario.
+
+---
+
+## Revisión de reglas Cursor antes de commit
+
+Cada vez que se vaya a **realizar un commit** (por petición explícita del usuario o como cierre de una tarea con cambios versionables):
+
+1. **Revisar** si el diff / el alcance de la tarea hace necesario u opcional pero recomendable actualizar los archivos bajo `.cursor/rules/` (`architecture.mdc`, `workflow.mdc`, `data-supabase.mdc`, `ui-compose.mdc`, etc.). Criterios orientativos: nueva arquitectura o archivos clave, tests o convenciones nuevas, cambios en Supabase/RPC/DTOs, Gradle (flavors, release, ProGuard), flujos del agente o checklist que hayan quedado desactualizados.
+2. Si **no** aplica ninguna actualización: decirlo en una frase clara (p. ej. «Reglas `.cursor/rules/`: sin cambios necesarios») y proceder con el commit si corresponde.
+3. Si **sí** aplica: **proponer** al usuario las ediciones concretas (contenido o diff de los `.mdc` afectados) o aplicarlas en el workspace como cambios revisables, para que el usuario las **acepte o rechace** en Cursor. No omitir este paso ni asumir en silencio que las reglas siguen al día.
+4. **Orden sugerido:** primero la revisión y la propuesta de reglas (si hay algo que contar); el usuario puede aceptar reglas y código en el mismo batch o pedir commits separados. El agente no debe presentar un commit como “cerrado” sin haber hecho al menos la comprobación del punto 1 y haber comunicado el resultado (2 o 3).
 
 ---
 
@@ -130,6 +145,7 @@ Cuando se cambie la lógica de filtros (BD o cliente), verificar:
 | Nueva función en `CentroFiltros.kt` | Test en `CentroFiltrosTest.kt` |
 | Nuevo método en `MapViewModel.kt` | Test en `MapViewModelTest.kt` |
 | Nueva propiedad computada en `MapState.kt` | Test en `MapStateTest.kt` |
+| Nuevo método en `SupabaseColegioRepository.kt` (o cambio de contrato RPC/select) | Test en `ColegioRepositoryTest.kt` (y revisar integración SQL si aplica) |
 | Nuevo repositorio o caso de uso de lógica pura | Test en su propio `*Test.kt` equivalente |
 
 No crear tests para: `@Composable`, funciones de color/label UI, métodos que usen `CameraUpdateFactory`, `Geocoder` o `cameraPosition.animate` (esos son tests instrumentados, fuera del scope de unit tests JVM).
@@ -162,12 +178,14 @@ No crear tests para: `@Composable`, funciones de color/label UI, métodos que us
 - `CentroFiltros.kt` — toda función de lógica pura (clasificación, toggle, matching, toRpcArray).
 - `MapViewModel.kt` — todo método público que no dependa de APIs Android.
 - `MapState.kt` — toda propiedad computada.
+- `SupabaseColegioRepository.kt` — rutas felices y errores representativos vía `ColegioRepositoryTest` (mock HTTP).
 - Cobertura actual de lógica de negocio: ~90%. No bajar de este umbral.
 
 ### Estructura y estilo de los tests
 
 - Patrón Given/When/Then en cada test (comentarios `// Given`, `// When`, `// Then`).
 - Nombre de test: `nombreFuncion_condicion_resultadoEsperado`.
-- Usar `FakeColegioRepository` en lugar de mockk para el repositorio (más estable).
+- **ViewModel** (`MapViewModelTest`): aislar con MockK o un fake mínimo del contrato `ColegioRepository` cuando baste con controlar `Result` (p. ej. fallos deterministas).
+- **Repositorio real** (`SupabaseColegioRepository`): preferir `ColegioRepositoryTest` con `MockEngine` (Ktor) y JSON alineado a los DTO, no sustituir la implementación por un fake salvo test de contrato aislado.
 - `MainDispatcherRule` obligatorio en todos los tests de ViewModel.
 - Tests de lógica pura sin ningún mock: solo datos y asserts.

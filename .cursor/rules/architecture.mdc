@@ -209,6 +209,7 @@ Stack habitual: **JUnit 4**, **MockK** (`coEvery` / `coVerify` para suspend), **
 | `es/colefinder/ui/map/MapStateTest.kt` | Getter `MapState.colegiosConDistancia` (filtros titularidad/tipo, AND, vacío, fallback texto libre). |
 | `es/colefinder/ui/map/CentroFiltrosTest.kt` | Clasificación de tipo, toggles de filtros, helpers RPC, matching de titularidad. |
 | `es/colefinder/data/SupabaseHeaderTest.kt` | Smoke de cabeceras de esquema en RPC vía cliente Ktor mock. |
+| `es/colefinder/data/ColegioRepositoryTest.kt` | `SupabaseColegioRepository` end-to-end con red simulada: RPC `nearby_colegios`, `searchColegiosByName`, éxito/vacío/red/HTTP 500 (`MockEngine`). |
 
 Convenciones útiles en `MapViewModelTest`:
 
@@ -216,6 +217,8 @@ Convenciones útiles en `MapViewModelTest`:
 - `UserPreferencesRepository`: `every { userPreferencesFlow } returns MutableStateFlow(UserPreferences(...))`.
 - Para forzar `Result.failure` en carga cercana sin depender de stubs frágiles, usar una **implementación mínima** de `ColegioRepository` de prueba que devuelva el `Result` deseado.
 - Tras tests que disparan trabajo asíncrono del ViewModel (p. ej. animación de cámara en `onColegioClick`), llamar a **`cancelForTest()`** (cancelación del `viewModelScope`) para evitar efectos colaterales al drenar la cola del test.
+
+Para **`SupabaseColegioRepository`**: los tests JVM usan `createSupabaseClient { httpEngine = MockEngine }` + instancia real del repositorio; el JSON mock debe alinearse con `NearbyColegioDto` / `ColegioSearchDto` y las rutas PostgREST (`/rpc/nearby_colegios`, `/colegios` sin `rpc`).
 
 No existe plantilla `ExampleUnitTest`; la cobertura relevante está en los archivos anteriores.
 
