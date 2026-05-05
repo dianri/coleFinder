@@ -284,4 +284,45 @@ class CentroFiltrosTest {
         assertTrue(strings.size == 2)
         assertTrue(strings.containsAll(listOf("PUBLICO", "CONCERTADO")))
     }
+
+    @Test
+    fun tipoCentroFiltroSet_toRpcArray_todos_esNull() {
+        // Given
+        val set = setOf(TipoCentroFiltro.TODOS)
+        // When
+        val result = set.toRpcArray()
+        // Then
+        assertNull(result)
+    }
+
+    @Test
+    fun tipoCentroFiltroSet_toRpcArray_primariaYFp_jsonArrayContieneValores() {
+        // Given
+        val set = setOf(TipoCentroFiltro.PRIMARIA, TipoCentroFiltro.FP)
+        // When
+        val result = set.toRpcArray()
+        // Then
+        assertNotNull(result)
+        val strings = result!!.map { it.jsonPrimitive.content }
+        assertTrue(strings.size == 2)
+        assertTrue(strings.containsAll(listOf("PRIMARIA", "FP")))
+    }
+
+    @Test
+    fun matchesTitularidadFiltros_publico_conFiltroPublico_true() {
+        // Given / When / Then
+        assertTrue("Público".matchesTitularidadFiltros(setOf(TitularidadFiltro.PUBLICO)))
+    }
+
+    @Test
+    fun matchesTitularidadFiltros_concertado_conFiltroPublico_false() {
+        // Given / When / Then
+        assertFalse("Concertado".matchesTitularidadFiltros(setOf(TitularidadFiltro.PUBLICO)))
+    }
+
+    @Test
+    fun matchesTitularidadFiltros_privado_conFiltroTodos_true() {
+        // Given / When / Then
+        assertTrue("Privado".matchesTitularidadFiltros(setOf(TitularidadFiltro.TODOS)))
+    }
 }

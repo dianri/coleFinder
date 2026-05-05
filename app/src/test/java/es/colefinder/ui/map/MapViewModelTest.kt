@@ -175,6 +175,38 @@ class MapViewModelTest {
     }
 
     @Test
+    fun toggleFiltroTipoCentro_desdeTodos_aPrimaria_yLlamaFetch() = runTest(mainDispatcherRule.dispatcher) {
+        // Given
+        val colegioRepository = mockk<ColegioRepository>()
+        coEvery {
+            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+        } returns Result.success(emptyList())
+        coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
+        val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
+        advanceUntilIdle()
+        // When
+        viewModel.state.test {
+            assertEquals(setOf(TipoCentroFiltro.TODOS), awaitItem().filtrosTipoCentro)
+            viewModel.toggleFiltroTipoCentro(TipoCentroFiltro.PRIMARIA)
+            // Then
+            assertEquals(setOf(TipoCentroFiltro.PRIMARIA), awaitItem().filtrosTipoCentro)
+            cancelAndIgnoreRemainingEvents()
+        }
+        advanceUntilIdle()
+        // Then
+        coVerify(atLeast = 1) {
+            colegioRepository.fetchNearbyColegios(
+                DEFAULT_LAT,
+                DEFAULT_LON,
+                50,
+                setOf(TitularidadFiltro.TODOS),
+                setOf(TipoCentroFiltro.PRIMARIA)
+            )
+        }
+        viewModel.cancelForTest()
+    }
+
+    @Test
     fun clearError_trasFalloDeCarga_limpiaError() = runTest(mainDispatcherRule.dispatcher) {
         // Given
         val colegioRepository = FakeColegioRepository(Result.failure(Exception("Sin red")))

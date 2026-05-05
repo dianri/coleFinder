@@ -118,3 +118,56 @@ Cuando se cambie la lógica de filtros (BD o cliente), verificar:
 - [ ] Búsqueda por nombre de colegio → sugerencias de BD + selección centra mapa
 - [ ] Cambio de filtro tras búsqueda → usa `puntoReferencia` de la búsqueda, no `userLocation`
 - [ ] Apertura de detalle de colegio → card intacta
+
+---
+
+## Reglas de tests unitarios
+
+### Cuándo crear tests nuevos
+
+| Código tocado | Test obligatorio |
+|:---|:---|
+| Nueva función en `CentroFiltros.kt` | Test en `CentroFiltrosTest.kt` |
+| Nuevo método en `MapViewModel.kt` | Test en `MapViewModelTest.kt` |
+| Nueva propiedad computada en `MapState.kt` | Test en `MapStateTest.kt` |
+| Nuevo repositorio o caso de uso de lógica pura | Test en su propio `*Test.kt` equivalente |
+
+No crear tests para: `@Composable`, funciones de color/label UI, métodos que usen `CameraUpdateFactory`, `Geocoder` o `cameraPosition.animate` (esos son tests instrumentados, fuera del scope de unit tests JVM).
+
+### Flujo obligatorio al añadir funcionalidad
+
+1. Escribir el código de producción.
+2. Escribir los tests que cubran la lógica nueva (Given/When/Then).
+3. Ejecutar todos los tests existentes para verificar que nada se rompió:
+   ```bash
+   ./gradlew :app:testPreDebugUnitTest :app:testProdDebugUnitTest
+   ```
+4. Solo hacer commit si todos los tests pasan.
+
+### Flujo obligatorio al modificar código existente
+
+1. Identificar qué tests cubren el código que se va a tocar.
+2. Hacer el cambio mínimo necesario.
+3. Ejecutar los tests:
+   ```bash
+   ./gradlew :app:testPreDebugUnitTest
+   ```
+4. Si un test falla → dos opciones:
+   - Corregir el código si el comportamiento esperado no debía cambiar.
+   - Actualizar el test con un comentario explicando por qué cambió el comportamiento.
+5. **Nunca borrar un test existente sin justificación explícita.**
+
+### Cobertura mínima exigida
+
+- `CentroFiltros.kt` — toda función de lógica pura (clasificación, toggle, matching, toRpcArray).
+- `MapViewModel.kt` — todo método público que no dependa de APIs Android.
+- `MapState.kt` — toda propiedad computada.
+- Cobertura actual de lógica de negocio: ~90%. No bajar de este umbral.
+
+### Estructura y estilo de los tests
+
+- Patrón Given/When/Then en cada test (comentarios `// Given`, `// When`, `// Then`).
+- Nombre de test: `nombreFuncion_condicion_resultadoEsperado`.
+- Usar `FakeColegioRepository` en lugar de mockk para el repositorio (más estable).
+- `MainDispatcherRule` obligatorio en todos los tests de ViewModel.
+- Tests de lógica pura sin ningún mock: solo datos y asserts.
