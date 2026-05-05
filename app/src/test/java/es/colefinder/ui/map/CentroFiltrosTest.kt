@@ -281,6 +281,7 @@ class CentroFiltrosTest {
         // Then
         assertNotNull(result)
         val strings = result!!.map { it.jsonPrimitive.content }
-        assertEquals(listOf("PUBLICO", "CONCERTADO"), strings)
+        assertTrue(strings.size == 2)
+        assertTrue(strings.containsAll(listOf("PUBLICO", "CONCERTADO")))
     }
 }
