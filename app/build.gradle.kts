@@ -9,6 +9,8 @@ val secretsProps = Properties().apply {
 
 fun getSecret(key: String): String = secretsProps.getProperty(key, "")
 
+val appVersionName = "1.0.0"
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -27,8 +29,14 @@ android {
         applicationId = "es.colefinder"
         minSdk = 30
         targetSdk = 36
+        // Versionado semántico: MAJOR.MINOR.PATCH
+        // versionCode: incrementar en +1 en cada release (nunca decrementar).
+        // versionName: "MAJOR.MINOR.PATCH" — actualizar junto a versionCode
+        //   MAJOR: cambio incompatible o rediseño mayor
+        //   MINOR: nueva funcionalidad compatible
+        //   PATCH: bugfix o mejora menor
         versionCode = 1
-        versionName = "1.0"
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -38,7 +46,6 @@ android {
         create("pre") {
             dimension = "env"
             applicationIdSuffix = ".pre"
-            versionNameSuffix = "-pre"
             resValue("string", "app_name", "ColeFinder PRE")
             buildConfigField("String", "SUPABASE_URL", "\"${getSecret("SUPABASE_URL_PRE")}\"")
             buildConfigField("String", "SUPABASE_ANON_KEY", "\"${getSecret("SUPABASE_ANON_KEY_PRE")}\"")
@@ -75,6 +82,21 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+    }
+}
+
+// Nombres de APK: colefinder-{pre|prod}-{versionName}-{buildType}.apk
+// (AGP 8.13 no expone archivesName en productFlavors; se aplica vía applicationVariants.)
+android.applicationVariants.configureEach {
+    val v = this
+    val base = when (v.flavorName) {
+        "pre" -> "colefinder-pre-${v.versionName}"
+        "prod" -> "colefinder-prod-${v.versionName}"
+        else -> v.name
+    }
+    outputs.configureEach {
+        val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
+        output.outputFileName = "$base-${v.buildType.name}.apk"
     }
 }
 

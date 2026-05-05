@@ -189,3 +189,62 @@ No crear tests para: `@Composable`, funciones de color/label UI, métodos que us
 - **Repositorio real** (`SupabaseColegioRepository`): preferir `ColegioRepositoryTest` con `MockEngine` (Ktor) y JSON alineado a los DTO, no sustituir la implementación por un fake salvo test de contrato aislado.
 - `MainDispatcherRule` obligatorio en todos los tests de ViewModel.
 - Tests de lógica pura sin ningún mock: solo datos y asserts.
+
+---
+
+## Reglas de CHANGELOG y versionado
+
+### Cuándo actualizar el CHANGELOG.md
+
+El fichero CHANGELOG.md en la raíz del proyecto DEBE actualizarse
+como parte del mismo commit que introduce el cambio. No dejar el
+changelog para después.
+
+| Tipo de cambio | Sección en CHANGELOG |
+|:---|:---|
+| Nueva funcionalidad visible para el usuario | `### Added` bajo `[Unreleased]` |
+| Cambio en comportamiento existente | `### Changed` bajo `[Unreleased]` |
+| Eliminación de algo que existía | `### Removed` bajo `[Unreleased]` |
+| Corrección de un bug | `### Fixed` bajo `[Unreleased]` |
+| Mejora técnica interna sin cambio de comportamiento | `### Changed` bajo `[Unreleased]` con nota "(interno)" |
+
+### Qué NO incluir en el CHANGELOG
+
+- Cambios en tests (salvo que se añada una suite completa nueva).
+- Cambios en ficheros de configuración de Cursor o `.cursor/rules/`.
+- Refactors de nombre de variable sin impacto funcional.
+- Actualizaciones de dependencias menores sin impacto visible.
+
+### Cuándo hacer una release (mover Unreleased a versión)
+
+Una release ocurre cuando se va a distribuir la app (merge a main
+con intención de publicar). En ese momento:
+
+1. Cambiar `## [Unreleased]` por `## [X.Y.Z] - YYYY-MM-DD` con la
+   fecha real del día.
+2. Añadir un nuevo bloque `## [Unreleased]` vacío encima.
+3. Incrementar versionCode en +1 en app/build.gradle.kts.
+4. Actualizar versionName a "X.Y.Z" en app/build.gradle.kts
+   (y la val appVersionName si se usa esa variante).
+5. Hacer commit con mensaje: `chore: release vX.Y.Z`.
+
+### Política de versionado semántico
+
+- **MAJOR** (X.0.0): cambio incompatible de contrato Supabase,
+  rediseño de pantalla principal o cambio de applicationId.
+- **MINOR** (1.X.0): nueva funcionalidad para el usuario
+  (nueva pantalla, nuevo filtro, nueva acción).
+- **PATCH** (1.0.X): bugfix, mejora de rendimiento,
+  ajuste visual menor.
+
+### Nombres de APK generados
+
+Los APKs siguen el patrón definido en build.gradle.kts:
+- PRE:  `colefinder-pre-{versionName}-debug.apk`
+- PROD: `colefinder-prod-{versionName}-release.apk`
+
+El flavor PRE no lleva suffix en versionName — el prefijo del
+fichero ya identifica el flavor. Al subir versionName los APKs
+reflejan la versión automáticamente sin ningún cambio adicional.
+
+### Ejemplo de entrada correcta en CHANGELOG
