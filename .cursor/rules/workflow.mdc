@@ -179,7 +179,26 @@ No crear tests para: `@Composable`, funciones de color/label UI, métodos que us
 - `MapViewModel.kt` — todo método público que no dependa de APIs Android.
 - `MapState.kt` — toda propiedad computada.
 - `SupabaseColegioRepository.kt` — rutas felices y errores representativos vía `ColegioRepositoryTest` (mock HTTP).
-- Cobertura actual de lógica de negocio: ~90%. No bajar de este umbral.
+
+### Ver cobertura real con Jacoco
+
+Para generar el informe HTML local y ver el % exacto:
+
+```bash
+# Informe solo del flavor pre (más rápido)
+./gradlew :app:testPreDebugUnitTest :app:jacocoPreDebugUnitTestReport
+
+# Abrir el informe en el navegador (Mac)
+open app/build/reports/jacoco/jacocoPreDebugUnitTestReport/html/index.html
+
+# Informe unificado pre+prod
+./gradlew :app:jacocoFullReport
+open app/build/reports/jacoco/jacocoFullReport/html/index.html
+```
+
+El umbral mínimo de cobertura de lógica de negocio es 88%.
+No bajar de este valor. Las clases excluidas del conteo son:
+Hilt generados, Composables, ui/theme, R, BuildConfig y serializers.
 
 ### Estructura y estilo de los tests
 

@@ -1,4 +1,6 @@
 import java.util.Properties
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.gradle.testing.jacoco.tasks.JacocoReport
 
 val secretsProps = Properties().apply {
     val defaultsFile = rootProject.file("secrets.defaults.properties")
@@ -19,6 +21,7 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.secrets)
+    id("jacoco")
 }
 
 android {
@@ -60,6 +63,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            enableUnitTestCoverage = true
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -82,7 +88,159 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.extensions.configure(JacocoTaskExtension::class) {
+                isIncludeNoLocationClasses = true
+                excludes = listOf("jdk.internal.*")
+            }
+        }
     }
+}
+
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+// Tarea reutilizable que genera el informe HTML + XML para un flavor+buildType
+fun registerJacocoTask(
+    flavorName: String,
+    buildTypeName: String
+) {
+    val variantName = "$flavorName${buildTypeName.replaceFirstChar { it.uppercaseChar() }}"
+    val testTaskName = "test${variantName.replaceFirstChar { it.uppercaseChar() }}UnitTest"
+    val reportTaskName = "jacoco${variantName.replaceFirstChar { it.uppercaseChar() }}UnitTestReport"
+
+    tasks.register<JacocoReport>(reportTaskName) {
+        dependsOn(testTaskName)
+        group = "Reporting"
+        description = "Genera informe de cobertura Jacoco para $variantName"
+
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+            csv.required.set(false)
+        }
+
+        val excludes = listOf(
+            "**/R.class",
+            "**/R\$*.class",
+            "**/BuildConfig.*",
+            "**/Manifest*.*",
+            "**/*Test*.*",
+            "android/**/*.*",
+            "**/*Hilt*.*",
+            "**/*_Factory*.*",
+            "**/*_MembersInjector*.*",
+            "**/*Module_*.*",
+            "**/hilt_aggregated_deps/**",
+            "**/dagger/**",
+            "**/*ComposableSingletons*.*",
+            "**/ui/theme/**",
+            "**/*\$\$serializer*.*",
+            // Compose UI — no testeables con JUnit (necesitan tests instrumentados)
+            "**/ui/map/MapScreen*.*",
+            "**/ui/map/components/**",
+            "**/ui/map/*Screen*.*",
+            "**/ui/map/*Content*.*",
+            "**/ui/map/*Dialog*.*",
+            "**/ui/map/*Card*.*",
+            "**/ui/map/*Row*.*",
+            "**/ui/map/*Item*.*",
+            "**/ui/map/*Button*.*",
+            // Hilt DI modules — no testeables unitariamente
+            "**/di/**",
+            // MainActivity
+            "**/MainActivity*.*",
+        )
+
+        val variantDir = variantName.replaceFirstChar { it.uppercaseChar() }
+        val javaClasses = fileTree(
+            layout.buildDirectory
+                .dir("intermediates/javac/$variantName/compile${variantDir}JavaWithJavac/classes")
+                .get()
+                .asFile
+        ) { exclude(excludes) }
+
+        val kotlinClasses = fileTree(
+            layout.buildDirectory.dir("tmp/kotlin-classes/$variantName").get().asFile
+        ) { exclude(excludes) }
+
+        classDirectories.setFrom(files(javaClasses, kotlinClasses))
+
+        sourceDirectories.setFrom(
+            files(
+                "src/main/java",
+                "src/main/kotlin"
+            )
+        )
+
+        executionData.setFrom(
+            fileTree(layout.buildDirectory.get().asFile) {
+                include("outputs/unit_test_code_coverage/${variantName}UnitTest/test${variantDir}UnitTest.exec")
+                include("jacoco/test${variantDir}UnitTest.exec")
+            }
+        )
+    }
+}
+
+registerJacocoTask("pre", "debug")
+registerJacocoTask("prod", "debug")
+
+tasks.register<JacocoReport>("jacocoFullReport") {
+    dependsOn("jacocoPreDebugUnitTestReport", "jacocoProdDebugUnitTestReport")
+    group = "Reporting"
+    description =
+        "Informe combinando sesiones pre+prod sobre bytecode preDebug (evita duplicar clases por flavor)."
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+
+    val excludes = listOf(
+        "**/R.class", "**/R\$*.class", "**/BuildConfig.*",
+        "**/Manifest*.*", "**/*Test*.*", "android/**/*.*",
+        "**/*Hilt*.*", "**/*_Factory*.*", "**/*_MembersInjector*.*",
+        "**/*Module_*.*", "**/hilt_aggregated_deps/**", "**/dagger/**",
+        "**/*ComposableSingletons*.*", "**/ui/theme/**", "**/*\$\$serializer*.*",
+        // Compose UI — no testeables con JUnit (necesitan tests instrumentados)
+        "**/ui/map/MapScreen*.*",
+        "**/ui/map/components/**",
+        "**/ui/map/*Screen*.*",
+        "**/ui/map/*Content*.*",
+        "**/ui/map/*Dialog*.*",
+        "**/ui/map/*Card*.*",
+        "**/ui/map/*Row*.*",
+        "**/ui/map/*Item*.*",
+        "**/ui/map/*Button*.*",
+        // Hilt DI modules — no testeables unitariamente
+        "**/di/**",
+        // MainActivity
+        "**/MainActivity*.*",
+    )
+
+    val preDir = "preDebug"
+    val preCap = "PreDebug"
+    classDirectories.setFrom(
+        files(
+            fileTree(
+                layout.buildDirectory
+                    .dir("intermediates/javac/$preDir/compile${preCap}JavaWithJavac/classes")
+                    .get()
+                    .asFile
+            ) { exclude(excludes) },
+            fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/$preDir").get().asFile) { exclude(excludes) }
+        )
+    )
+
+    sourceDirectories.setFrom(files("src/main/java", "src/main/kotlin"))
+
+    executionData.setFrom(
+        fileTree(layout.buildDirectory.get().asFile) {
+            include("outputs/unit_test_code_coverage/preDebugUnitTest/test${preCap}UnitTest.exec")
+            include("outputs/unit_test_code_coverage/prodDebugUnitTest/testProdDebugUnitTest.exec")
+        }
+    )
 }
 
 // Nombres de APK: colefinder-{pre|prod}-{versionName}-{buildType}.apk

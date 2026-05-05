@@ -16,6 +16,7 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 - Activado isMinifyEnabled + isShrinkResources en release con reglas ProGuard
 - versionName actualizado a formato semver "1.0.0"
 - Eliminado versionNameSuffix del flavor pre — el flavor queda identificado por el nombre del APK
+- JaCoCo: informes de cobertura unitaria, exclusiones UI/Compose y módulos no unit-testeables; CI publica informe HTML (interno)
 
 ## [1.0.0] - 2026-05-05
 
