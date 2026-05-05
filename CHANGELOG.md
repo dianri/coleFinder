@@ -17,6 +17,7 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 - versionName actualizado a formato semver "1.0.0"
 - Eliminado versionNameSuffix del flavor pre — el flavor queda identificado por el nombre del APK
 - JaCoCo: informes de cobertura unitaria, exclusiones UI/Compose y módulos no unit-testeables; CI publica informe HTML (interno)
+- CI GitHub Actions: actions con versión fija, caché Gradle explícita, Node 24 para JS actions, sin `--no-daemon` en Gradle (interno)
 
 ## [1.0.0] - 2026-05-05
 
