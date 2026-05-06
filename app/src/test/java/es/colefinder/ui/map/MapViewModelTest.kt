@@ -45,6 +45,10 @@ class MapViewModelTest {
             }
             c = c.superclass
         }
+        throw IllegalStateException(
+            "cancelForTest: no se encontró método clear/clear\$ en la jerarquía de ${javaClass.name}; " +
+                "viewModelScope podría seguir activo."
+        )
     }
 
     private companion object {

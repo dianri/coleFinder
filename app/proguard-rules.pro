@@ -39,7 +39,6 @@
 -keep class es.colefinder.data.model.** { *; }
 -keep class es.colefinder.data.network.** { *; }
 
-# Google Maps / Play Services
--keep class com.google.android.gms.** { *; }
+# Google Maps / Play Services — consumer rules de los AAR cubren lo necesario; evitar -keep global del paquete gms.
 # Nota: R8 puede mostrar WARNING "Companion could not be found" en bytecode interno de
 # play-services-location (p. ej. zze). Es un aviso conocido del AAR de Google, no bloquea el shrinker.
