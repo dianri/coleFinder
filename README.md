@@ -2,7 +2,7 @@
 
 **ColeFinder** es una aplicación Android nativa para ayudar a docentes a localizar centros educativos cercanos (colegios e institutos) mediante geolocalización y mapas.
 
-![CI](https://github.com/dianri/coleFinder/actions/workflows/ci.yml/badge.svg?branch=develop)
+![CI](https://github.com/dianri/coleFinder/actions/workflows/ci.yml/badge.svg?branch=main)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin&logoColor=white)
 ![Android](https://img.shields.io/badge/Android-Jetpack%20Compose-4285F4?logo=android&logoColor=white)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
