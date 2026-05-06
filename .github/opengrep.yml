@@ -1,0 +1,8 @@
+rules:
+  - p/kotlin
+  - p/android
+  - p/secrets
+  - p/owasp-top-ten
+
+args:
+  - --no-color

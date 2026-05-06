@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Cache Gradle
+        uses: actions/cache@v4.2.2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Create secrets.defaults.properties
+        env:
+          SUPABASE_URL_PRE: ${{ secrets.SUPABASE_URL_PRE }}
+          SUPABASE_ANON_KEY_PRE: ${{ secrets.SUPABASE_ANON_KEY_PRE }}
+          SUPABASE_URL_PROD: ${{ secrets.SUPABASE_URL_PROD }}
+          SUPABASE_ANON_KEY_PROD: ${{ secrets.SUPABASE_ANON_KEY_PROD }}
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+        run: |
+          cat > secrets.defaults.properties << EOF
+          SUPABASE_URL_PRE=${SUPABASE_URL_PRE:-https://placeholder.supabase.co}
+          SUPABASE_ANON_KEY_PRE=${SUPABASE_ANON_KEY_PRE:-placeholder-anon-key-pre}
+          SUPABASE_URL_PROD=${SUPABASE_URL_PROD:-https://placeholder.supabase.co}
+          SUPABASE_ANON_KEY_PROD=${SUPABASE_ANON_KEY_PROD:-placeholder-anon-key-prod}
+          MAPS_API_KEY=${MAPS_API_KEY:-placeholder-maps-key}
+          EOF
+
+      - name: Run unit tests (pre flavor)
+        run: ./gradlew :app:testPreDebugUnitTest --stacktrace
+
+      - name: Run unit tests (prod flavor)
+        run: ./gradlew :app:testProdDebugUnitTest --stacktrace
+
+      - name: Generate Jacoco coverage report
+        run: ./gradlew :app:jacocoFullReport
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: coverage-report
+          path: app/build/reports/jacoco/jacocoFullReport/html/
+          retention-days: 14
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: test-results
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+          retention-days: 7
+
+  build:
+    name: Assemble Debug
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Cache Gradle
+        uses: actions/cache@v4.2.2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Create secrets.defaults.properties
+        env:
+          SUPABASE_URL_PRE: ${{ secrets.SUPABASE_URL_PRE }}
+          SUPABASE_ANON_KEY_PRE: ${{ secrets.SUPABASE_ANON_KEY_PRE }}
+          SUPABASE_URL_PROD: ${{ secrets.SUPABASE_URL_PROD }}
+          SUPABASE_ANON_KEY_PROD: ${{ secrets.SUPABASE_ANON_KEY_PROD }}
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+        run: |
+          cat > secrets.defaults.properties << EOF
+          SUPABASE_URL_PRE=${SUPABASE_URL_PRE:-https://placeholder.supabase.co}
+          SUPABASE_ANON_KEY_PRE=${SUPABASE_ANON_KEY_PRE:-placeholder-anon-key-pre}
+          SUPABASE_URL_PROD=${SUPABASE_URL_PROD:-https://placeholder.supabase.co}
+          SUPABASE_ANON_KEY_PROD=${SUPABASE_ANON_KEY_PROD:-placeholder-anon-key-prod}
+          MAPS_API_KEY=${MAPS_API_KEY:-placeholder-maps-key}
+          EOF
+
+      - name: Assemble Pre Debug
+        run: ./gradlew :app:assemblePreDebug
+
+      - name: Assemble Prod Debug
+        run: ./gradlew :app:assembleProdDebug
+
+      - name: Assemble Prod Release
+        run: ./gradlew :app:assembleProdRelease
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: debug-apks
+          path: |
+            app/build/outputs/apk/pre/debug/*.apk
+            app/build/outputs/apk/prod/debug/*.apk
+          retention-days: 7
