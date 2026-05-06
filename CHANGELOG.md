@@ -13,6 +13,7 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 - Política de versionado semántico y nombres de APK por flavor
 
 ### Changed
+- CI: artefacto `debug-apks` solo incluye APKs pre/debug y prod/debug (excluye prod/release con placeholders) (interno)
 - Gradle/CI: eliminado `gradle/gradle-daemon-jvm.properties` (forzaba JDK 21 JetBrains vía foojay → 400 en CI); módulo `app` con `kotlin { jvmToolchain(17) }`; `setup-java@v4` con Temurin 17 (interno)
 - OpenGrep: `.github/opengrep.yml` con packs `p/kotlin`, `p/android`, `p/secrets` y `p/owasp-top-ten`; `args: --no-color` para logs legibles en CI (interno)
 - CI GitHub Actions: `permissions` solo `contents: read`; job Assemble incluye `assembleProdRelease` (interno)

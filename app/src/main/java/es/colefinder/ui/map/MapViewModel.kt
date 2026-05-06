@@ -297,7 +297,7 @@ class MapViewModel @Inject constructor(
         reloadWithCurrentFilters()
     }
 
-    private fun reloadWithCurrentFilters() {
+    internal fun reloadWithCurrentFilters() {
         val punto = _state.value.puntoReferencia ?: _state.value.userLocation
         val lat = punto?.latitude ?: DEFAULT_LAT
         val lon = punto?.longitude ?: DEFAULT_LON
