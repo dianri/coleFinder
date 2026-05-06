@@ -32,6 +32,7 @@ class MapViewModelTest {
 
     /** Cancela [viewModelScope] (método [clear] interno en lifecycle 2.8: puede ir manglado como `clear$…`). */
     private fun ViewModel.cancelForTest() {
+        var found = false
         var c: Class<*>? = javaClass
         while (c != null) {
             for (m in c.declaredMethods) {
@@ -40,15 +41,13 @@ class MapViewModelTest {
                 if (n == "clear" || (n.startsWith("clear") && n.contains("$"))) {
                     m.isAccessible = true
                     m.invoke(this)
+                    found = true
                     return
                 }
             }
             c = c.superclass
         }
-        throw IllegalStateException(
-            "cancelForTest: no se encontró método clear/clear\$ en la jerarquía de ${javaClass.name}; " +
-                "viewModelScope podría seguir activo."
-        )
+        check(found) { "No se pudo cancelar viewModelScope en test para ${javaClass.name}" }
     }
 
     private companion object {
