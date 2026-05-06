@@ -101,6 +101,38 @@ jacoco {
     toolVersion = "0.8.11"
 }
 
+private val jacocoExcludes = listOf(
+    "**/R.class",
+    "**/R\$*.class",
+    "**/BuildConfig.*",
+    "**/Manifest*.*",
+    "**/*Test*.*",
+    "android/**/*.*",
+    "**/*Hilt*.*",
+    "**/*_Factory*.*",
+    "**/*_MembersInjector*.*",
+    "**/*Module_*.*",
+    "**/hilt_aggregated_deps/**",
+    "**/dagger/**",
+    "**/*ComposableSingletons*.*",
+    "**/ui/theme/**",
+    "**/*\$\$serializer*.*",
+    // Compose UI — no testeables con JUnit (necesitan tests instrumentados)
+    "**/ui/map/MapScreen*.*",
+    "**/ui/map/components/**",
+    "**/ui/map/*Screen*.*",
+    "**/ui/map/*Content*.*",
+    "**/ui/map/*Dialog*.*",
+    "**/ui/map/*Card*.*",
+    "**/ui/map/*Row*.*",
+    "**/ui/map/*Item*.*",
+    "**/ui/map/*Button*.*",
+    // Hilt DI modules — no testeables unitariamente
+    "**/di/**",
+    // MainActivity
+    "**/MainActivity*.*",
+)
+
 // Tarea reutilizable que genera el informe HTML + XML para un flavor+buildType
 fun registerJacocoTask(
     flavorName: String,
@@ -121,49 +153,17 @@ fun registerJacocoTask(
             csv.required.set(false)
         }
 
-        val excludes = listOf(
-            "**/R.class",
-            "**/R\$*.class",
-            "**/BuildConfig.*",
-            "**/Manifest*.*",
-            "**/*Test*.*",
-            "android/**/*.*",
-            "**/*Hilt*.*",
-            "**/*_Factory*.*",
-            "**/*_MembersInjector*.*",
-            "**/*Module_*.*",
-            "**/hilt_aggregated_deps/**",
-            "**/dagger/**",
-            "**/*ComposableSingletons*.*",
-            "**/ui/theme/**",
-            "**/*\$\$serializer*.*",
-            // Compose UI — no testeables con JUnit (necesitan tests instrumentados)
-            "**/ui/map/MapScreen*.*",
-            "**/ui/map/components/**",
-            "**/ui/map/*Screen*.*",
-            "**/ui/map/*Content*.*",
-            "**/ui/map/*Dialog*.*",
-            "**/ui/map/*Card*.*",
-            "**/ui/map/*Row*.*",
-            "**/ui/map/*Item*.*",
-            "**/ui/map/*Button*.*",
-            // Hilt DI modules — no testeables unitariamente
-            "**/di/**",
-            // MainActivity
-            "**/MainActivity*.*",
-        )
-
         val variantDir = variantName.replaceFirstChar { it.uppercaseChar() }
         val javaClasses = fileTree(
             layout.buildDirectory
                 .dir("intermediates/javac/$variantName/compile${variantDir}JavaWithJavac/classes")
                 .get()
                 .asFile
-        ) { exclude(excludes) }
+        ) { exclude(jacocoExcludes) }
 
         val kotlinClasses = fileTree(
             layout.buildDirectory.dir("tmp/kotlin-classes/$variantName").get().asFile
-        ) { exclude(excludes) }
+        ) { exclude(jacocoExcludes) }
 
         classDirectories.setFrom(files(javaClasses, kotlinClasses))
 
@@ -197,28 +197,6 @@ tasks.register<JacocoReport>("jacocoFullReport") {
         html.required.set(true)
     }
 
-    val excludes = listOf(
-        "**/R.class", "**/R\$*.class", "**/BuildConfig.*",
-        "**/Manifest*.*", "**/*Test*.*", "android/**/*.*",
-        "**/*Hilt*.*", "**/*_Factory*.*", "**/*_MembersInjector*.*",
-        "**/*Module_*.*", "**/hilt_aggregated_deps/**", "**/dagger/**",
-        "**/*ComposableSingletons*.*", "**/ui/theme/**", "**/*\$\$serializer*.*",
-        // Compose UI — no testeables con JUnit (necesitan tests instrumentados)
-        "**/ui/map/MapScreen*.*",
-        "**/ui/map/components/**",
-        "**/ui/map/*Screen*.*",
-        "**/ui/map/*Content*.*",
-        "**/ui/map/*Dialog*.*",
-        "**/ui/map/*Card*.*",
-        "**/ui/map/*Row*.*",
-        "**/ui/map/*Item*.*",
-        "**/ui/map/*Button*.*",
-        // Hilt DI modules — no testeables unitariamente
-        "**/di/**",
-        // MainActivity
-        "**/MainActivity*.*",
-    )
-
     val preDir = "preDebug"
     val preCap = "PreDebug"
     classDirectories.setFrom(
@@ -228,8 +206,8 @@ tasks.register<JacocoReport>("jacocoFullReport") {
                     .dir("intermediates/javac/$preDir/compile${preCap}JavaWithJavac/classes")
                     .get()
                     .asFile
-            ) { exclude(excludes) },
-            fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/$preDir").get().asFile) { exclude(excludes) }
+            ) { exclude(jacocoExcludes) },
+            fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/$preDir").get().asFile) { exclude(jacocoExcludes) }
         )
     )
 

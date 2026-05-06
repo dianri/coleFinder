@@ -166,7 +166,7 @@ No crear tests para: `@Composable`, funciones de color/label UI, métodos que us
 2. Hacer el cambio mínimo necesario.
 3. Ejecutar los tests:
    ```bash
-   ./gradlew :app:testPreDebugUnitTest
+   ./gradlew :app:testPreDebugUnitTest :app:testProdDebugUnitTest
    ```
 4. Si un test falla → dos opciones:
    - Corregir el código si el comportamiento esperado no debía cambiar.
