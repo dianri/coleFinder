@@ -97,6 +97,10 @@ android {
     }
 }
 
+kotlin {
+    jvmToolchain(17)
+}
+
 jacoco {
     toolVersion = "0.8.11"
 }
