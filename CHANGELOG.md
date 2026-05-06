@@ -7,6 +7,7 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
+- OpenGrep: `.github/opengrep.yml` con packs `p/kotlin`, `p/android`, `p/secrets` y `p/owasp-top-ten` (interno)
 - Tests unitarios para CentroFiltros, MapViewModel y MapState (~88% cobertura lógica de negocio)
 - Tests de ColegioRepository con Ktor MockEngine
 - Reglas de Cursor para flujo de trabajo, tests y calidad de código
