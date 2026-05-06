@@ -380,4 +380,38 @@ class MapViewModelTest {
             viewModel.cancelForTest()
         }
     }
+
+    @Test
+    fun reloadWithCurrentFilters_conFiltrosActivos_reutilizaFiltrosEnFetch() = runTest(mainDispatcherRule.dispatcher) {
+        // Given
+        val colegioRepository = mockk<ColegioRepository>()
+        coEvery {
+            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+        } returns Result.success(emptyList())
+        coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
+        val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
+        advanceUntilIdle()
+        try {
+            viewModel.toggleFiltroTitularidad(TitularidadFiltro.PUBLICO)
+            viewModel.toggleFiltroTipoCentro(TipoCentroFiltro.PRIMARIA)
+            advanceUntilIdle()
+
+            // When
+            viewModel.reloadWithCurrentFilters()
+            advanceUntilIdle()
+
+            // Then
+            coVerify(atLeast = 1) {
+                colegioRepository.fetchNearbyColegios(
+                    DEFAULT_LAT,
+                    DEFAULT_LON,
+                    50,
+                    setOf(TitularidadFiltro.PUBLICO),
+                    setOf(TipoCentroFiltro.PRIMARIA)
+                )
+            }
+        } finally {
+            viewModel.cancelForTest()
+        }
+    }
 }
