@@ -47,13 +47,19 @@ jobs:
         run: chmod +x gradlew
 
       - name: Create secrets.defaults.properties
+        env:
+          SUPABASE_URL_PRE: ${{ secrets.SUPABASE_URL_PRE }}
+          SUPABASE_ANON_KEY_PRE: ${{ secrets.SUPABASE_ANON_KEY_PRE }}
+          SUPABASE_URL_PROD: ${{ secrets.SUPABASE_URL_PROD }}
+          SUPABASE_ANON_KEY_PROD: ${{ secrets.SUPABASE_ANON_KEY_PROD }}
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
         run: |
-          cat > secrets.defaults.properties << 'EOF'
-          SUPABASE_URL_PRE=https://placeholder.supabase.co
-          SUPABASE_ANON_KEY_PRE=placeholder-anon-key-pre
-          SUPABASE_URL_PROD=https://placeholder.supabase.co
-          SUPABASE_ANON_KEY_PROD=placeholder-anon-key-prod
-          MAPS_API_KEY=placeholder-maps-key
+          cat > secrets.defaults.properties << EOF
+          SUPABASE_URL_PRE=${SUPABASE_URL_PRE:-https://placeholder.supabase.co}
+          SUPABASE_ANON_KEY_PRE=${SUPABASE_ANON_KEY_PRE:-placeholder-anon-key-pre}
+          SUPABASE_URL_PROD=${SUPABASE_URL_PROD:-https://placeholder.supabase.co}
+          SUPABASE_ANON_KEY_PROD=${SUPABASE_ANON_KEY_PROD:-placeholder-anon-key-prod}
+          MAPS_API_KEY=${MAPS_API_KEY:-placeholder-maps-key}
           EOF
 
       - name: Run unit tests (pre flavor)
@@ -113,13 +119,19 @@ jobs:
         run: chmod +x gradlew
 
       - name: Create secrets.defaults.properties
+        env:
+          SUPABASE_URL_PRE: ${{ secrets.SUPABASE_URL_PRE }}
+          SUPABASE_ANON_KEY_PRE: ${{ secrets.SUPABASE_ANON_KEY_PRE }}
+          SUPABASE_URL_PROD: ${{ secrets.SUPABASE_URL_PROD }}
+          SUPABASE_ANON_KEY_PROD: ${{ secrets.SUPABASE_ANON_KEY_PROD }}
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
         run: |
-          cat > secrets.defaults.properties << 'EOF'
-          SUPABASE_URL_PRE=https://placeholder.supabase.co
-          SUPABASE_ANON_KEY_PRE=placeholder-anon-key-pre
-          SUPABASE_URL_PROD=https://placeholder.supabase.co
-          SUPABASE_ANON_KEY_PROD=placeholder-anon-key-prod
-          MAPS_API_KEY=placeholder-maps-key
+          cat > secrets.defaults.properties << EOF
+          SUPABASE_URL_PRE=${SUPABASE_URL_PRE:-https://placeholder.supabase.co}
+          SUPABASE_ANON_KEY_PRE=${SUPABASE_ANON_KEY_PRE:-placeholder-anon-key-pre}
+          SUPABASE_URL_PROD=${SUPABASE_URL_PROD:-https://placeholder.supabase.co}
+          SUPABASE_ANON_KEY_PROD=${SUPABASE_ANON_KEY_PROD:-placeholder-anon-key-prod}
+          MAPS_API_KEY=${MAPS_API_KEY:-placeholder-maps-key}
           EOF
 
       - name: Assemble Pre Debug
