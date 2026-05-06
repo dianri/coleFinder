@@ -1,0 +1,5 @@
+rules:
+  - p/kotlin
+  - p/android
+  - p/secrets
+  - p/owasp-top-ten
