@@ -7,13 +7,13 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 ## [Unreleased]
 
 ### Added
-- OpenGrep: `.github/opengrep.yml` con packs `p/kotlin`, `p/android`, `p/secrets` y `p/owasp-top-ten` (interno)
 - Tests unitarios para CentroFiltros, MapViewModel y MapState (~88% cobertura lógica de negocio)
 - Tests de ColegioRepository con Ktor MockEngine
 - Reglas de Cursor para flujo de trabajo, tests y calidad de código
 - Política de versionado semántico y nombres de APK por flavor
 
 ### Changed
+- OpenGrep: `.github/opengrep.yml` con packs `p/kotlin`, `p/android`, `p/secrets` y `p/owasp-top-ten` (interno)
 - CI GitHub Actions: `permissions` solo `contents: read`; job Assemble incluye `assembleProdRelease` (interno)
 - ProGuard/R8: eliminado keep global de `com.google.android.gms.**`; se confía en reglas de consumidor de los AAR (interno)
 - JaCoCo: lista de exclusiones centralizada en `jacocoExcludes`; `jacocoFullReport` incluye `.exec` bajo `jacoco/**` además de unit test code coverage (interno)
