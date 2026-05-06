@@ -2,6 +2,11 @@
 
 **ColeFinder** es una aplicación Android nativa para ayudar a docentes a localizar centros educativos cercanos (colegios e institutos) mediante geolocalización y mapas.
 
+![CI](https://github.com/dianri/coleFinder/actions/workflows/ci.yml/badge.svg?branch=main)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin&logoColor=white)
+![Android](https://img.shields.io/badge/Android-Jetpack%20Compose-4285F4?logo=android&logoColor=white)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
+
 ## Stack tecnológico
 
 - **Lenguaje**: [Kotlin 2.0.21](https://kotlinlang.org/) (K2).
@@ -65,12 +70,38 @@ Hay dos variantes de debug; el task `compileDebugKotlin` es ambiguo. Ejemplos:
 ./gradlew :app:assembleProdDebug
 ```
 
+## Tests
+
+Las pruebas unitarias usan **JUnit 4**, **MockK** y **kotlinx-coroutines-test**.
+
+```bash
+# Ejecutar tests unitarios (flavor pre)
+./gradlew :app:testPreDebugUnitTest
+
+# Ejecutar con informe de cobertura Jacoco (pre + prod)
+./gradlew :app:jacocoFullReport
+```
+
+El informe HTML se genera en:
+`app/build/reports/jacoco/jacocoFullReport/html/index.html`
+
+## CI/CD
+
+El workflow de GitHub Actions (`.github/workflows/ci.yml`) se ejecuta en cada push y pull request a `develop` y `main`:
+
+| Job | Qué hace |
+|-----|----------|
+| **Assemble Debug** | Compila ambos flavors (pre + prod) |
+| **Unit Tests** | Ejecuta tests y genera cobertura Jacoco |
+
+Los artefactos de cobertura se guardan 14 días en cada ejecución de CI.
+
 ## Funcionalidades principales
 
 - **Mapa interactivo** con marcadores codificados por color (titularidad) y numerados.
 - **Búsqueda híbrida**: la SearchBar busca simultáneamente por nombre de centro (Supabase) y por ubicación/dirección (Geocoder). Los resultados de centros aparecen primero con icono de escuela; las ubicaciones con icono de pin.
 - **Filtros** por titularidad (Público, Concertado, Privado) y tipo de centro (Primaria, Secundaria, FP, Adultos, Especial, Otros), aplicados en servidor y con fallback en cliente.
-- **Detalle del centro** con navegación a Google Maps, llamada y favoritos (in-memory).
+- **Detalle del centro** con navegación a Google Maps y llamada.
 - **Long press** en el mapa para explorar centros en cualquier punto.
 
 ## Depuración de conectividad
@@ -89,6 +120,29 @@ cd coleFinder
 ```
 
 Crea `secrets.properties` como se indica arriba antes de compilar.
+
+## Flujo de ramas
+
+| Rama | Propósito |
+|------|-----------|
+| `main` | Código de producción estable |
+| `develop` | Rama de integración principal |
+| `feature/*` | Nuevas funcionalidades |
+
+Las PRs van siempre de `feature/*` → `develop` → `main`.
+
+## Licencia
+
+Copyright (C) 2026 Diego Angel Fernandez Garcia
+
+Este proyecto está licenciado bajo la **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+Esto significa que:
+- Puedes ver, estudiar y modificar el código libremente.
+- Si distribuyes una versión modificada o la usas en un servicio, **debes publicar el código fuente** bajo la misma licencia.
+- No está permitido publicar esta aplicación o una derivada en tiendas de apps (Google Play, etc.) sin publicar también el código fuente completo.
+
+Ver el archivo [LICENSE](./LICENSE) para el texto completo.
 
 ---
 
