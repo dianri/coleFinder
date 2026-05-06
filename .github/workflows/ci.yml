@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -128,6 +127,9 @@ jobs:
 
       - name: Assemble Prod Debug
         run: ./gradlew :app:assembleProdDebug
+
+      - name: Assemble Prod Release
+        run: ./gradlew :app:assembleProdRelease
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4.6.2

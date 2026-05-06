@@ -258,12 +258,14 @@ con intención de publicar). En ese momento:
 
 ### Nombres de APK generados
 
-Los APKs siguen el patrón definido en build.gradle.kts:
-- PRE:  `colefinder-pre-{versionName}-debug.apk`
+Patrón general: `colefinder-{flavor}-{versionName}-{buildType}.apk`
+(definido en `build.gradle.kts` vía `applicationVariants`).
+
+- PRE: `colefinder-pre-{versionName}-debug.apk`
 - PROD: `colefinder-prod-{versionName}-release.apk`
 
-El flavor PRE no lleva suffix en versionName — el prefijo del
-fichero ya identifica el flavor. Al subir versionName los APKs
-reflejan la versión automáticamente sin ningún cambio adicional.
+El flavor PRE no lleva suffix en `versionName` de Gradle — el prefijo
+del nombre del fichero ya identifica el flavor. Al subir `versionName`,
+los APKs reflejan la versión automáticamente sin ningún cambio adicional.
 
 ### Ejemplo de entrada correcta en CHANGELOG

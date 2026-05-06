@@ -217,6 +217,8 @@ tasks.register<JacocoReport>("jacocoFullReport") {
         fileTree(layout.buildDirectory.get().asFile) {
             include("outputs/unit_test_code_coverage/preDebugUnitTest/test${preCap}UnitTest.exec")
             include("outputs/unit_test_code_coverage/prodDebugUnitTest/testProdDebugUnitTest.exec")
+            include("jacoco/**/test${preCap}UnitTest.exec")
+            include("jacoco/**/testProdDebugUnitTest.exec")
         }
     )
 }

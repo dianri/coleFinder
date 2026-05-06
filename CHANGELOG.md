@@ -14,9 +14,9 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 - Política de versionado semántico y nombres de APK por flavor
 
 ### Changed
-- CI GitHub Actions: bloque `permissions` con `contents: read` y `actions: write` para artefactos (interno)
+- CI GitHub Actions: `permissions` solo `contents: read`; job Assemble incluye `assembleProdRelease` (interno)
 - ProGuard/R8: eliminado keep global de `com.google.android.gms.**`; se confía en reglas de consumidor de los AAR (interno)
-- JaCoCo: lista de exclusiones centralizada en `jacocoExcludes` (interno)
+- JaCoCo: lista de exclusiones centralizada en `jacocoExcludes`; `jacocoFullReport` incluye `.exec` bajo `jacoco/**` además de unit test code coverage (interno)
 - Activado isMinifyEnabled + isShrinkResources en release con reglas ProGuard
 - versionName actualizado a formato semver "1.0.0"
 - Eliminado versionNameSuffix del flavor pre — el flavor queda identificado por el nombre del APK

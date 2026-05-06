@@ -112,15 +112,18 @@ class MapViewModelTest {
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
         advanceUntilIdle()
-        // When
-        viewModel.state.test {
-            assertEquals(emptySet<Int>(), awaitItem().favoritosIds)
-            viewModel.toggleFavorito(42)
-            // Then
-            assertEquals(setOf(42), awaitItem().favoritosIds)
-            cancelAndIgnoreRemainingEvents()
+        try {
+            // When
+            viewModel.state.test {
+                assertEquals(emptySet<Int>(), awaitItem().favoritosIds)
+                viewModel.toggleFavorito(42)
+                // Then
+                assertEquals(setOf(42), awaitItem().favoritosIds)
+                cancelAndIgnoreRemainingEvents()
+            }
+        } finally {
+            viewModel.cancelForTest()
         }
-        viewModel.cancelForTest()
     }
 
     @Test
@@ -133,17 +136,20 @@ class MapViewModelTest {
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
         advanceUntilIdle()
-        // When
-        viewModel.state.test {
-            assertEquals(emptySet<Int>(), awaitItem().favoritosIds)
-            viewModel.toggleFavorito(42)
-            assertEquals(setOf(42), awaitItem().favoritosIds)
-            viewModel.toggleFavorito(42)
-            // Then
-            assertEquals(emptySet<Int>(), awaitItem().favoritosIds)
-            cancelAndIgnoreRemainingEvents()
+        try {
+            // When
+            viewModel.state.test {
+                assertEquals(emptySet<Int>(), awaitItem().favoritosIds)
+                viewModel.toggleFavorito(42)
+                assertEquals(setOf(42), awaitItem().favoritosIds)
+                viewModel.toggleFavorito(42)
+                // Then
+                assertEquals(emptySet<Int>(), awaitItem().favoritosIds)
+                cancelAndIgnoreRemainingEvents()
+            }
+        } finally {
+            viewModel.cancelForTest()
         }
-        viewModel.cancelForTest()
     }
 
     @Test
@@ -156,26 +162,29 @@ class MapViewModelTest {
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
         advanceUntilIdle()
-        // When
-        viewModel.state.test {
-            assertEquals(setOf(TitularidadFiltro.TODOS), awaitItem().filtrosTitularidad)
-            viewModel.toggleFiltroTitularidad(TitularidadFiltro.PUBLICO)
+        try {
+            // When
+            viewModel.state.test {
+                assertEquals(setOf(TitularidadFiltro.TODOS), awaitItem().filtrosTitularidad)
+                viewModel.toggleFiltroTitularidad(TitularidadFiltro.PUBLICO)
+                // Then
+                assertEquals(setOf(TitularidadFiltro.PUBLICO), awaitItem().filtrosTitularidad)
+                cancelAndIgnoreRemainingEvents()
+            }
+            advanceUntilIdle()
             // Then
-            assertEquals(setOf(TitularidadFiltro.PUBLICO), awaitItem().filtrosTitularidad)
-            cancelAndIgnoreRemainingEvents()
+            coVerify(atLeast = 1) {
+                colegioRepository.fetchNearbyColegios(
+                    DEFAULT_LAT,
+                    DEFAULT_LON,
+                    50,
+                    setOf(TitularidadFiltro.PUBLICO),
+                    setOf(TipoCentroFiltro.TODOS)
+                )
+            }
+        } finally {
+            viewModel.cancelForTest()
         }
-        advanceUntilIdle()
-        // Then
-        coVerify(atLeast = 1) {
-            colegioRepository.fetchNearbyColegios(
-                DEFAULT_LAT,
-                DEFAULT_LON,
-                50,
-                setOf(TitularidadFiltro.PUBLICO),
-                setOf(TipoCentroFiltro.TODOS)
-            )
-        }
-        viewModel.cancelForTest()
     }
 
     @Test
@@ -188,26 +197,29 @@ class MapViewModelTest {
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
         advanceUntilIdle()
-        // When
-        viewModel.state.test {
-            assertEquals(setOf(TipoCentroFiltro.TODOS), awaitItem().filtrosTipoCentro)
-            viewModel.toggleFiltroTipoCentro(TipoCentroFiltro.PRIMARIA)
+        try {
+            // When
+            viewModel.state.test {
+                assertEquals(setOf(TipoCentroFiltro.TODOS), awaitItem().filtrosTipoCentro)
+                viewModel.toggleFiltroTipoCentro(TipoCentroFiltro.PRIMARIA)
+                // Then
+                assertEquals(setOf(TipoCentroFiltro.PRIMARIA), awaitItem().filtrosTipoCentro)
+                cancelAndIgnoreRemainingEvents()
+            }
+            advanceUntilIdle()
             // Then
-            assertEquals(setOf(TipoCentroFiltro.PRIMARIA), awaitItem().filtrosTipoCentro)
-            cancelAndIgnoreRemainingEvents()
+            coVerify(atLeast = 1) {
+                colegioRepository.fetchNearbyColegios(
+                    DEFAULT_LAT,
+                    DEFAULT_LON,
+                    50,
+                    setOf(TitularidadFiltro.TODOS),
+                    setOf(TipoCentroFiltro.PRIMARIA)
+                )
+            }
+        } finally {
+            viewModel.cancelForTest()
         }
-        advanceUntilIdle()
-        // Then
-        coVerify(atLeast = 1) {
-            colegioRepository.fetchNearbyColegios(
-                DEFAULT_LAT,
-                DEFAULT_LON,
-                50,
-                setOf(TitularidadFiltro.TODOS),
-                setOf(TipoCentroFiltro.PRIMARIA)
-            )
-        }
-        viewModel.cancelForTest()
     }
 
     @Test
@@ -216,17 +228,20 @@ class MapViewModelTest {
         val colegioRepository = FakeColegioRepository(Result.failure(Exception("Sin red")))
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
         advanceUntilIdle()
-        // When
-        viewModel.loadNearbyColegios(1.0, 2.0)
-        advanceUntilIdle()
-        assertNotNull(viewModel.state.value.error)
-        viewModel.clearError()
-        // Then
-        viewModel.state.test {
-            assertNull(awaitItem().error)
-            cancelAndIgnoreRemainingEvents()
+        try {
+            // When
+            viewModel.loadNearbyColegios(1.0, 2.0)
+            advanceUntilIdle()
+            assertNotNull(viewModel.state.value.error)
+            viewModel.clearError()
+            // Then
+            viewModel.state.test {
+                assertNull(awaitItem().error)
+                cancelAndIgnoreRemainingEvents()
+            }
+        } finally {
+            viewModel.cancelForTest()
         }
-        viewModel.cancelForTest()
     }
 
     @Test
@@ -240,26 +255,29 @@ class MapViewModelTest {
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
         advanceUntilIdle()
         val click = LatLng(40.0, -3.0)
-        // When
-        viewModel.onMapLongClick(click)
-        advanceUntilIdle()
-        // Then
-        viewModel.state.test {
-            val s = awaitItem()
-            assertEquals(click, s.puntoReferencia)
-            assertNull(s.selectedColegioConDistancia)
-            cancelAndIgnoreRemainingEvents()
+        try {
+            // When
+            viewModel.onMapLongClick(click)
+            advanceUntilIdle()
+            // Then
+            viewModel.state.test {
+                val s = awaitItem()
+                assertEquals(click, s.puntoReferencia)
+                assertNull(s.selectedColegioConDistancia)
+                cancelAndIgnoreRemainingEvents()
+            }
+            coVerify(atLeast = 1) {
+                colegioRepository.fetchNearbyColegios(
+                    40.0,
+                    -3.0,
+                    50,
+                    setOf(TitularidadFiltro.TODOS),
+                    setOf(TipoCentroFiltro.TODOS)
+                )
+            }
+        } finally {
+            viewModel.cancelForTest()
         }
-        coVerify(atLeast = 1) {
-            colegioRepository.fetchNearbyColegios(
-                40.0,
-                -3.0,
-                50,
-                setOf(TitularidadFiltro.TODOS),
-                setOf(TipoCentroFiltro.TODOS)
-            )
-        }
-        viewModel.cancelForTest()
     }
 
     @Test
@@ -295,17 +313,20 @@ class MapViewModelTest {
         val colegioRepository = FakeColegioRepository(Result.failure(Exception("Sin red")))
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
         advanceUntilIdle()
-        // When
-        viewModel.loadNearbyColegios(10.0, 20.0)
-        advanceUntilIdle()
-        // Then
-        viewModel.state.test {
-            val s = awaitItem()
-            assertNotNull(s.error)
-            assertFalse(s.isLoading)
-            cancelAndIgnoreRemainingEvents()
+        try {
+            // When
+            viewModel.loadNearbyColegios(10.0, 20.0)
+            advanceUntilIdle()
+            // Then
+            viewModel.state.test {
+                val s = awaitItem()
+                assertNotNull(s.error)
+                assertFalse(s.isLoading)
+                cancelAndIgnoreRemainingEvents()
+            }
+        } finally {
+            viewModel.cancelForTest()
         }
-        viewModel.cancelForTest()
     }
 
     @Test
@@ -319,17 +340,20 @@ class MapViewModelTest {
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
         advanceUntilIdle()
-        // When
-        viewModel.loadNearbyColegios(0.0, 0.0)
-        advanceUntilIdle()
-        // Then
-        viewModel.state.test {
-            val s = awaitItem()
-            assertEquals(lista, s.colegiosCercanos)
-            assertFalse(s.isLoading)
-            cancelAndIgnoreRemainingEvents()
+        try {
+            // When
+            viewModel.loadNearbyColegios(0.0, 0.0)
+            advanceUntilIdle()
+            // Then
+            viewModel.state.test {
+                val s = awaitItem()
+                assertEquals(lista, s.colegiosCercanos)
+                assertFalse(s.isLoading)
+                cancelAndIgnoreRemainingEvents()
+            }
+        } finally {
+            viewModel.cancelForTest()
         }
-        viewModel.cancelForTest()
     }
 
     @Test
@@ -344,14 +368,17 @@ class MapViewModelTest {
         advanceUntilIdle()
         viewModel.onMapLongClick(LatLng(41.0, -4.0))
         advanceUntilIdle()
-        // When
-        viewModel.state.test {
-            assertEquals(FocusedRequestType.POINT, awaitItem().focusedRequestType)
-            viewModel.consumeFocusedRequest()
-            // Then
-            assertEquals(FocusedRequestType.NONE, awaitItem().focusedRequestType)
-            cancelAndIgnoreRemainingEvents()
+        try {
+            // When
+            viewModel.state.test {
+                assertEquals(FocusedRequestType.POINT, awaitItem().focusedRequestType)
+                viewModel.consumeFocusedRequest()
+                // Then
+                assertEquals(FocusedRequestType.NONE, awaitItem().focusedRequestType)
+                cancelAndIgnoreRemainingEvents()
+            }
+        } finally {
+            viewModel.cancelForTest()
         }
-        viewModel.cancelForTest()
     }
 }
