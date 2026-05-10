@@ -1,8 +1,13 @@
+@file:OptIn(io.github.jan.supabase.annotations.SupabaseInternal::class)
+
 package es.colefinder.data
 
 import es.colefinder.BuildConfig
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpRequestRetry
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -21,6 +26,21 @@ object Supabase {
         // supabase-kt aplica este valor como requestTimeoutMillis en Ktor (por defecto 10s).
         // Redes móviles lentas (DNS/TLS) suelen beneficiarse de un margen algo mayor.
         requestTimeout = 25.seconds
+        httpEngine = OkHttp.create {
+            config {
+                retryOnConnectionFailure(true)
+                connectTimeout(15, TimeUnit.SECONDS)
+                readTimeout(25, TimeUnit.SECONDS)
+                writeTimeout(15, TimeUnit.SECONDS)
+            }
+        }
+        httpConfig {
+            install(HttpRequestRetry) {
+                retryOnServerErrors(maxRetries = 2)
+                exponentialDelay()
+                retryOnException(maxRetries = 2, retryOnTimeout = true)
+            }
+        }
         if (BuildConfig.DEBUG) {
             defaultLogLevel = io.github.jan.supabase.logging.LogLevel.DEBUG
         }
