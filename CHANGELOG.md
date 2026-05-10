@@ -6,6 +6,9 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Fixed
+- Peticiones a Supabase (RPC cercanos): motor HTTP Ktor con OkHttp, timeouts explícitos y reintentos para reducir fallos intermitentes por conexión cerrada (p. ej. EOF tras keep-alive)
+
 ### Added
 - Tests unitarios para CentroFiltros, MapViewModel y MapState (~88% cobertura lógica de negocio)
 - Tests de ColegioRepository con Ktor MockEngine
