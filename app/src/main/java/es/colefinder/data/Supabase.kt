@@ -30,7 +30,7 @@ object Supabase {
             config {
                 retryOnConnectionFailure(true)
                 connectTimeout(15, TimeUnit.SECONDS)
-                readTimeout(30, TimeUnit.SECONDS)
+                readTimeout(25, TimeUnit.SECONDS)
                 writeTimeout(15, TimeUnit.SECONDS)
             }
         }
