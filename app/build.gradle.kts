@@ -38,7 +38,7 @@ android {
         //   MAJOR: cambio incompatible o rediseño mayor
         //   MINOR: nueva funcionalidad compatible
         //   PATCH: bugfix o mejora menor
-        versionCode = 1
+        versionCode = 2
         versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -257,7 +257,8 @@ dependencies {
 
     // Supabase
     implementation(libs.supabase.postgrest)
-    implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.okhttp3)
     implementation(libs.ktor.client.logging)
     implementation(libs.kotlinx.serialization.json)
 
