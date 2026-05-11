@@ -6,6 +6,9 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Added
+- Actualizaciones in-app flexibles (Play App Update): comprobación al volver a primer plano, flujo con Play y banner con "Actualizar" / "Reiniciar e instalar"
+
 ### Fixed
 - Peticiones a Supabase (RPC cercanos): motor HTTP Ktor con OkHttp, timeouts explícitos y reintentos para reducir fallos intermitentes por conexión cerrada (p. ej. EOF tras keep-alive)
 - OkHttp `readTimeout` en 25 s, alineado con `requestTimeout` de Ktor/Supabase (no mayor que el timeout global de la petición)

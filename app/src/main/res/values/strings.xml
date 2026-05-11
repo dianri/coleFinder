@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">ColeFinder</string>
+    <string name="in_app_update_available_title">Nueva versión</string>
+    <string name="in_app_update_available_body">Hay una actualización en Google Play. Puedes descargarla en segundo plano.</string>
+    <string name="in_app_update_download">Actualizar</string>
+    <string name="in_app_update_ready_title">Actualización lista</string>
+    <string name="in_app_update_ready_body">Reinicia la app para instalar la nueva versión.</string>
+    <string name="in_app_update_restart">Reiniciar e instalar</string>
 </resources>
