@@ -227,6 +227,15 @@ changelog para después.
 | Corrección de un bug | `### Fixed` bajo `[Unreleased]` |
 | Mejora técnica interna sin cambio de comportamiento | `### Changed` bajo `[Unreleased]` con nota "(interno)" |
 
+### Estructura bajo `[Unreleased]` (sin cabeceras duplicadas)
+
+- Dentro de un mismo bloque `## [Unreleased]` debe haber **como máximo una** cabecera de cada tipo: `### Added`, `### Changed`, `### Deprecated`, `### Removed`, `### Fixed`, `### Security` (las que realmente se usen en el proyecto).
+- Al añadir una entrada nueva:
+  - **No** crear una cabecera `### Added` (u otra) nueva si ya existe una bajo el mismo `## [Unreleased]`.
+  - Añadir siempre un **nuevo bullet** dentro de la sección existente que corresponda según la tabla de tipos más arriba.
+- Keep a Changelog define un orden canónico entre *tipos* de sección (`Added`, `Changed`, …, `Fixed`, `Security`). En el `## [Unreleased]` de este repo puede usarse `### Fixed` antes de `### Added` si así se mantiene la consistencia del fichero; **no reordenar** bloques ya publicados ni mezclar entradas entre versiones. Lo imprescindible es **no duplicar** cabeceras del mismo tipo bajo el mismo `## [Unreleased]`.
+- Antes de dar por cerrado un cambio que toque `CHANGELOG.md`, **comprobar** que bajo `## [Unreleased]` no hay dos veces `### Added`, dos `### Fixed`, etc., y que cada bullet está en la sección correcta según la tabla.
+
 ### Qué NO incluir en el CHANGELOG
 
 - Cambios en tests (salvo que se añada una suite completa nueva).
