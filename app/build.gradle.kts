@@ -38,7 +38,7 @@ android {
         //   MAJOR: cambio incompatible o rediseño mayor
         //   MINOR: nueva funcionalidad compatible
         //   PATCH: bugfix o mejora menor
-        versionCode = 2
+        versionCode = 3
         versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -131,6 +131,7 @@ private val jacocoExcludes = listOf(
     "**/ui/map/*Row*.*",
     "**/ui/map/*Item*.*",
     "**/ui/map/*Button*.*",
+    "**/ui/update/**",
     // Hilt DI modules — no testeables unitariamente
     "**/di/**",
     // MainActivity
@@ -266,6 +267,10 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
+
+    // Play In-App Updates (flexible)
+    implementation(libs.play.app.update)
+    implementation(libs.play.app.update.ktx)
 
     // Maps and Location
     implementation(libs.maps.compose)

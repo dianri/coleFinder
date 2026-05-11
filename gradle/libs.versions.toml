@@ -25,6 +25,7 @@ playServicesLocation = "21.3.0"
 accompanistPermissions = "0.37.3"
 datastore = "1.1.2"
 turbine = "1.2.1"
+playAppUpdate = "2.1.0"
 
 [libraries]
 androidx-compose-foundation = { module = "androidx.compose.foundation:foundation" }
@@ -67,6 +68,8 @@ play-services-location = { group = "com.google.android.gms", name = "play-servic
 accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanistPermissions" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
+play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

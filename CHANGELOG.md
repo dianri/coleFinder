@@ -11,6 +11,7 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 - OkHttp `readTimeout` en 25 s, alineado con `requestTimeout` de Ktor/Supabase (no mayor que el timeout global de la petición)
 
 ### Added
+- Actualizaciones in-app flexibles (Play App Update): comprobación al volver a primer plano, flujo con Play y banner con "Actualizar" / "Reiniciar e instalar"
 - Tests unitarios para CentroFiltros, MapViewModel y MapState (~88% cobertura lógica de negocio)
 - Tests de ColegioRepository con Ktor MockEngine
 - Reglas de Cursor para flujo de trabajo, tests y calidad de código
