@@ -38,7 +38,7 @@ android {
         //   MAJOR: cambio incompatible o rediseño mayor
         //   MINOR: nueva funcionalidad compatible
         //   PATCH: bugfix o mejora menor
-        versionCode = 2
+        versionCode = 3
         versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
