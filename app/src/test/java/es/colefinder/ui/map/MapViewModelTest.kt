@@ -106,7 +106,7 @@ class MapViewModelTest {
         // Given
         val colegioRepository = mockk<ColegioRepository>()
         coEvery {
-            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+            colegioRepository.fetchNearbyColegios(any(), any(), 200, any(), any())
         } returns Result.success(emptyList())
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
@@ -130,7 +130,7 @@ class MapViewModelTest {
         // Given
         val colegioRepository = mockk<ColegioRepository>()
         coEvery {
-            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+            colegioRepository.fetchNearbyColegios(any(), any(), 200, any(), any())
         } returns Result.success(emptyList())
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
@@ -156,7 +156,7 @@ class MapViewModelTest {
         // Given
         val colegioRepository = mockk<ColegioRepository>()
         coEvery {
-            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+            colegioRepository.fetchNearbyColegios(any(), any(), 200, any(), any())
         } returns Result.success(emptyList())
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
@@ -176,7 +176,7 @@ class MapViewModelTest {
                 colegioRepository.fetchNearbyColegios(
                     DEFAULT_LAT,
                     DEFAULT_LON,
-                    50,
+                    200,
                     setOf(TitularidadFiltro.PUBLICO),
                     setOf(TipoCentroFiltro.TODOS)
                 )
@@ -191,7 +191,7 @@ class MapViewModelTest {
         // Given
         val colegioRepository = mockk<ColegioRepository>()
         coEvery {
-            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+            colegioRepository.fetchNearbyColegios(any(), any(), 200, any(), any())
         } returns Result.success(emptyList())
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
@@ -211,7 +211,7 @@ class MapViewModelTest {
                 colegioRepository.fetchNearbyColegios(
                     DEFAULT_LAT,
                     DEFAULT_LON,
-                    50,
+                    200,
                     setOf(TitularidadFiltro.TODOS),
                     setOf(TipoCentroFiltro.PRIMARIA)
                 )
@@ -248,7 +248,7 @@ class MapViewModelTest {
         // Given
         val colegioRepository = mockk<ColegioRepository>()
         coEvery {
-            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+            colegioRepository.fetchNearbyColegios(any(), any(), 200, any(), any())
         } returns Result.success(emptyList())
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
@@ -269,7 +269,7 @@ class MapViewModelTest {
                 colegioRepository.fetchNearbyColegios(
                     40.0,
                     -3.0,
-                    50,
+                    200,
                     setOf(TitularidadFiltro.TODOS),
                     setOf(TipoCentroFiltro.TODOS)
                 )
@@ -284,7 +284,7 @@ class MapViewModelTest {
         // Given
         val colegioRepository = mockk<ColegioRepository>()
         coEvery {
-            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+            colegioRepository.fetchNearbyColegios(any(), any(), 200, any(), any())
         } returns Result.success(emptyList())
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
@@ -334,7 +334,7 @@ class MapViewModelTest {
         val lista = listOf(sampleColegioConDistancia())
         val colegioRepository = mockk<ColegioRepository>()
         coEvery {
-            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+            colegioRepository.fetchNearbyColegios(any(), any(), 200, any(), any())
         } returns Result.success(lista)
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
@@ -360,7 +360,7 @@ class MapViewModelTest {
         // Given
         val colegioRepository = mockk<ColegioRepository>()
         coEvery {
-            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+            colegioRepository.fetchNearbyColegios(any(), any(), 200, any(), any())
         } returns Result.success(emptyList())
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
@@ -386,7 +386,7 @@ class MapViewModelTest {
         // Given
         val colegioRepository = mockk<ColegioRepository>()
         coEvery {
-            colegioRepository.fetchNearbyColegios(any(), any(), 50, any(), any())
+            colegioRepository.fetchNearbyColegios(any(), any(), 200, any(), any())
         } returns Result.success(emptyList())
         coEvery { colegioRepository.searchColegiosByName(any(), any()) } returns Result.success(emptyList())
         val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
@@ -405,7 +405,7 @@ class MapViewModelTest {
                 colegioRepository.fetchNearbyColegios(
                     DEFAULT_LAT,
                     DEFAULT_LON,
-                    50,
+                    200,
                     setOf(TitularidadFiltro.PUBLICO),
                     setOf(TipoCentroFiltro.PRIMARIA)
                 )

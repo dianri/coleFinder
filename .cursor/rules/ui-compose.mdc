@@ -193,7 +193,7 @@ La `SearchBar` soporta dos tipos de sugerencia:
 - **Ubicación** (`suggestion.colegioId == null`): icono `Icons.Default.LocationOn`.
 
 Al seleccionar una sugerencia de colegio, el mapa se centra, se fija `puntoReferencia`,
-se cargan centros cercanos y se auto-selecciona el centro (si aparece en los 50 resultados).
+se cargan centros cercanos y se auto-selecciona el centro (si aparece en los 200 resultados).
 
 ### `ColegioDetailCard` (implementado)
 Aparece como overlay en `Alignment.BottomCenter` con `zIndex(2f)` y `padding(bottom = 80.dp)`.
