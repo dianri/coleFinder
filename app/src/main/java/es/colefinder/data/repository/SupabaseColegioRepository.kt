@@ -53,7 +53,7 @@ class SupabaseColegioRepository @Inject constructor(
             val params = buildJsonObject {
                 put("p_lat", lat)
                 put("p_lon", lon)
-                put("p_limit", limit)
+                put("p_limit", 200)
                 if (arrayTitularidad != null) putJsonArray("p_titularidades") {
                     arrayTitularidad.forEach { add(it) }
                 }
