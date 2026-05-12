@@ -1,0 +1,153 @@
+-- =============================================================================
+-- Import Mercadata → staging.colegios (idempotente vía ON CONFLICT)
+-- =============================================================================
+-- NO ejecutar en public. Solo staging.
+--
+-- Requisito: constraint UNIQUE (fuente, fuente_id) en staging.colegios
+-- (mismo nombre que en public: colegios_fuente_fuente_id_key). Ejecutar antes:
+--   supabase/scripts/add_staging_colegios_fuente_fuente_id_unique.sql
+--
+-- Contexto BD (inspección 2026-05-12):
+-- - import.centros_educativos_import_espana_mercadata: columna "clasificación" (con tilde), no "clasificacion".
+-- - latitud/longitud en CSV como texto con coma decimal (ej. 43,3136199).
+-- - Filas import previstas: ~31.575; descartadas ~2.540 (coords nulas / no parseables / fuera de rango España).
+--
+-- Tras validar en staging, promoción a public (solo cuando apruebes): ver
+-- supabase/scripts/promote_mercadata_public_colegios.sql
+-- =============================================================================
+
+BEGIN;
+
+INSERT INTO staging.colegios (
+    nombre,
+    direccion,
+    latitud,
+    longitud,
+    tipo,
+    localidad,
+    fuente,
+    fuente_id,
+    descripcion_entidad,
+    descripcion,
+    content_url,
+    provincia,
+    telefono,
+    fax,
+    email,
+    tipo_centro_normalizado,
+    titularidad_normalizada,
+    es_dificil_desempeno,
+    es_rural,
+    jornada_tipo,
+    location
+)
+SELECT
+    trim(m.nombre) AS nombre,
+    nullif(trim(m.direccion), '') AS direccion,
+    lat AS latitud,
+    lon AS longitud,
+    nullif(trim(m.naturaleza), '') AS tipo,
+    nullif(trim(m.ciudad), '') AS localidad,
+    'mercadata'::text AS fuente,
+    m.id AS fuente_id,
+    nullif(trim(m.titular), '') AS descripcion_entidad,
+    nullif(trim(m.descripcion), '') AS descripcion,
+    nullif(trim(m.web), '') AS content_url,
+    nullif(trim(m.provincia), '') AS provincia,
+    COALESCE(
+        nullif(trim(m.tel1), ''),
+        nullif(trim(m.tel2), ''),
+        nullif(trim(m.tel3), '')
+    ) AS telefono,
+    nullif(trim(m.fax), '') AS fax,
+    COALESCE(
+        nullif(trim(m."email 1"), ''),
+        nullif(trim(m."email 2"), ''),
+        nullif(trim(m."email 3"), '')
+    ) AS email,
+    CASE
+        WHEN trim(m."clasificación") = 'Educación Básica' THEN 'PRIMARIA'
+        WHEN trim(m."clasificación") = 'Educación Básica y Bachillerato' THEN 'SECUNDARIA'
+        WHEN trim(m."clasificación") = 'Educación Básica, Bachillerato y Formación Profesional' THEN 'SECUNDARIA'
+        WHEN trim(m."clasificación") = 'Educación Básica y Formación Profesional' THEN 'OTROS'
+        WHEN trim(m."clasificación") = 'Bachillerato' THEN 'SECUNDARIA'
+        WHEN trim(m."clasificación") = 'Bachillerato y Formación Profesional' THEN 'SECUNDARIA'
+        WHEN trim(m."clasificación") = 'Formación Profesional' THEN 'FP'
+        WHEN trim(m."clasificación") = 'Educación Especial' THEN 'ESPECIAL'
+        WHEN trim(m."clasificación") = 'Educación de Adultos' THEN 'ADULTOS'
+        WHEN trim(m."clasificación") = 'Enseñanzas Artísticas' THEN 'OTROS'
+        WHEN trim(m."clasificación") = 'Escuela Oficial de Idiomas' THEN 'OTROS'
+        WHEN trim(m."clasificación") = 'Enseñanzas Deportivas' THEN 'OTROS'
+        WHEN trim(m."clasificación") = 'Educación a Distancia' THEN 'OTROS'
+        WHEN trim(m."clasificación") = 'Centro Bilingüe' THEN 'OTROS'
+        WHEN trim(m."clasificación") = 'Extranjero' THEN 'OTROS'
+        WHEN trim(m."clasificación") = '--' THEN 'OTROS'
+        WHEN trim(m."clasificación") = 'Formación Militar' THEN 'OTROS'
+        WHEN (
+            trim(m."clasificación") ILIKE '%bachillerato%'
+            OR trim(m.nombre) ILIKE 'IES %'
+            OR trim(m.nombre) ILIKE '% IES %'
+            OR trim(m.nombre) ILIKE 'I.E.S.%'
+            OR trim(m.nombre) ILIKE '% I.E.S.%'
+            OR trim(m.nombre) ILIKE '%instituto de educación secundaria%'
+            OR trim(m.nombre) ILIKE '%instituto educación secundaria%'
+            OR trim(m.nombre) ILIKE '%instituto de enseñanza secundaria%'
+            OR trim(m.nombre) ILIKE '% instituto %'
+            OR trim(m.nombre) ILIKE 'instituto %'
+        ) AND trim(m.nombre) NOT ILIKE 'Colegio Instituto%' THEN 'SECUNDARIA'
+        ELSE 'OTROS'
+    END AS tipo_centro_normalizado,
+    CASE trim(m.naturaleza)
+        WHEN 'Centro Público' THEN 'PUBLICO'
+        WHEN 'Centro Privado - Concertado' THEN 'CONCERTADO'
+        WHEN 'Centro Privado' THEN 'PRIVADO'
+        ELSE 'OTRO'
+    END AS titularidad_normalizada,
+    false AS es_dificil_desempeno,
+    false AS es_rural,
+    'desconocida'::text AS jornada_tipo,
+    ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography AS location
+FROM import.centros_educativos_import_espana_mercadata m
+CROSS JOIN LATERAL (
+    SELECT
+        CASE
+            WHEN trim(coalesce(m.latitud, '')) = '' OR trim(coalesce(m.longitud, '')) = '' THEN NULL
+            ELSE
+                CASE
+                    WHEN nullif(
+                        trim(replace(replace(trim(m.latitud), ',', '.'), ' ', '')),
+                        ''
+                    ) ~ '^-?[0-9]+(\.[0-9]+)?$'
+                    THEN nullif(
+                        trim(replace(replace(trim(m.latitud), ',', '.'), ' ', '')),
+                        ''
+                    )::double precision
+                    ELSE NULL
+                END
+        END AS lat,
+        CASE
+            WHEN trim(coalesce(m.latitud, '')) = '' OR trim(coalesce(m.longitud, '')) = '' THEN NULL
+            ELSE
+                CASE
+                    WHEN nullif(
+                        trim(replace(replace(trim(m.longitud), ',', '.'), ' ', '')),
+                        ''
+                    ) ~ '^-?[0-9]+(\.[0-9]+)?$'
+                    THEN nullif(
+                        trim(replace(replace(trim(m.longitud), ',', '.'), ' ', '')),
+                        ''
+                    )::double precision
+                    ELSE NULL
+                END
+        END AS lon
+) AS coords
+WHERE
+    trim(coalesce(m.nombre, '')) <> ''
+    AND m.id IS NOT NULL
+    AND coords.lat IS NOT NULL
+    AND coords.lon IS NOT NULL
+    AND coords.lat BETWEEN 27 AND 44.5
+    AND coords.lon BETWEEN -18 AND 5
+ON CONFLICT (fuente, fuente_id) DO NOTHING;
+
+COMMIT;

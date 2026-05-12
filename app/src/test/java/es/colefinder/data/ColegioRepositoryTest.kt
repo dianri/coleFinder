@@ -117,7 +117,7 @@ class ColegioRepositoryTest {
         val result = repo.fetchNearbyColegios(
             lat = 40.4168,
             lon = -3.7038,
-            limit = 50,
+            limit = 200,
             titularidades = setOf(TitularidadFiltro.TODOS),
             tipos = setOf(TipoCentroFiltro.TODOS)
         )
@@ -151,7 +151,7 @@ class ColegioRepositoryTest {
         val result = repo.fetchNearbyColegios(
             lat = 40.0,
             lon = -3.0,
-            limit = 50,
+            limit = 200,
             titularidades = setOf(TitularidadFiltro.TODOS),
             tipos = setOf(TipoCentroFiltro.TODOS)
         )
@@ -174,7 +174,7 @@ class ColegioRepositoryTest {
         val result = repo.fetchNearbyColegios(
             lat = 40.0,
             lon = -3.0,
-            limit = 50,
+            limit = 200,
             titularidades = setOf(TitularidadFiltro.TODOS),
             tipos = setOf(TipoCentroFiltro.TODOS)
         )
