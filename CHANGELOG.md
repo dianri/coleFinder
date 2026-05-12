@@ -29,6 +29,7 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 - Eliminado versionNameSuffix del flavor pre — el flavor queda identificado por el nombre del APK
 - JaCoCo: informes de cobertura unitaria, exclusiones UI/Compose y módulos no unit-testeables; CI publica informe HTML unificado `jacocoFullReport` (pre+prod) como artefacto (interno)
 - CI GitHub Actions: actions con versión fija, caché Gradle explícita, Node 24 para JS actions, sin `--no-daemon` en Gradle (interno)
+- Corrección de tipo_centro_normalizado en centros Mercadata: 3.842 institutos reclasificados como SECUNDARIA mediante heurística por nombre (IES, Instituto) y clasificación con bachillerato. PRIMARIA pasa de 25.801 a 22.078 centros.
 
 ## [1.0.0] - 2026-05-05
 

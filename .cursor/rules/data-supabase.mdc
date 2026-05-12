@@ -46,7 +46,7 @@ Es la **única tabla de lectura** que usa la app. La app no hace `insert`/`updat
 | `localidad` | `text` | |
 | `provincia` | `text` | Solo en BD y DTO; **no mapeado al modelo de dominio `Colegio`** |
 | `telefono` | `text` | Nullable |
-| `fuente` | `text` | Origen: `'andalucia'`, `'castilla_y_leon'`, `'canarias'`, `'comunidad_madrid'`, `'datos.madrid.es'` |
+| `fuente` | `text` | Origen: `'andalucia'`, `'castilla_y_leon'`, `'canarias'`, `'comunidad_madrid'`, `'datos.madrid.es'`, `'mercadata'` |
 | `fuente_id` | `bigint` | ID en la tabla de import correspondiente |
 | `descripcion_entidad` | `text` | Campo libre de Madrid open data |
 | `categoria_madrid` | `text` | URL path de categoría (solo fuente `datos.madrid.es`) |
@@ -65,6 +65,7 @@ Los campos `tipo_centro_normalizado` y `titularidad_normalizada` se poblaron des
 | Fuente | Tabla import | Join key | Campo tipo | Campo titularidad |
 |---|---|---|---|---|
 | `andalucia` | `colegios_import_andalucia` | `codigo` | `D_DENOMINA` | `D_TIPO` + cols `priv_c_*` |
+| `mercadata` | `import.centros_educativos_import_espana_mercadata` | `id` | `clasificación` | `naturaleza` |
 | `castilla_y_leon` | `colegios_import_castillayleon` | `"CÓDIGO"` | `"DENOMINACIÓN GENÉRICA BREVE"` | `"NATURALEZA"` + `"CONCIERTO"` |
 | `canarias` | `colegios_import_canarias` | `"Codigo"` | `"Denominacion"` | `"Naturaleza"` + `"Concierto"` |
 | `comunidad_madrid` | `centros_educativos_import_comunidad_madrid` | `centro_codigo` | `centro_tipo_desc_abreviada` | `centro_titularidad` |
