@@ -47,7 +47,7 @@ interface ColegioRepository {
     suspend fun fetchNearbyColegios(
         lat: Double,
         lon: Double,
-        limit: Int = 50,
+        limit: Int = 200,
         titularidades: Set<TitularidadFiltro> = setOf(TitularidadFiltro.TODOS),
         tipos: Set<TipoCentroFiltro> = setOf(TipoCentroFiltro.TODOS)
     ): Result<List<ColegioConDistancia>>
@@ -213,7 +213,7 @@ Stack habitual: **JUnit 4**, **MockK** (`coEvery` / `coVerify` para suspend), **
 
 Convenciones útiles en `MapViewModelTest`:
 
-- Stub de `fetchNearbyColegios` con **tercer argumento explícito `50`** (`limit` por defecto del ViewModel/repositorio) para que MockK coincida con la firma real.
+- Stub de `fetchNearbyColegios` con **tercer argumento explícito `200`** (`limit` por defecto del ViewModel/repositorio) para que MockK coincida con la firma real.
 - `UserPreferencesRepository`: `every { userPreferencesFlow } returns MutableStateFlow(UserPreferences(...))`.
 - Para forzar `Result.failure` en carga cercana sin depender de stubs frágiles, usar una **implementación mínima** de `ColegioRepository` de prueba que devuelva el `Result` deseado.
 - Tras tests que disparan trabajo asíncrono del ViewModel (p. ej. animación de cámara en `onColegioClick`), llamar a **`cancelForTest()`** (cancelación del `viewModelScope`) para evitar efectos colaterales al drenar la cola del test.
