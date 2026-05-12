@@ -6,6 +6,8 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-12
+
 ### Fixed
 - Peticiones a Supabase (RPC cercanos): motor HTTP Ktor con OkHttp, timeouts explícitos y reintentos para reducir fallos intermitentes por conexión cerrada (p. ej. EOF tras keep-alive)
 - OkHttp `readTimeout` en 25 s, alineado con `requestTimeout` de Ktor/Supabase (no mayor que el timeout global de la petición)
