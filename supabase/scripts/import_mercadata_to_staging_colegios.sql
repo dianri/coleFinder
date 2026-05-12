@@ -143,6 +143,7 @@ CROSS JOIN LATERAL (
 ) AS coords
 WHERE
     trim(coalesce(m.nombre, '')) <> ''
+    AND m.id IS NOT NULL
     AND coords.lat IS NOT NULL
     AND coords.lon IS NOT NULL
     AND coords.lat BETWEEN 27 AND 44.5
