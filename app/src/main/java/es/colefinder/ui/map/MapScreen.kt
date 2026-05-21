@@ -751,7 +751,9 @@ fun MapScreen(
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 tonalElevation = 6.dp,
                 shadowElevation = 6.dp,
-                modifier = Modifier.padding(horizontal = 32.dp)
+                modifier = Modifier
+                    .padding(horizontal = 32.dp)
+                    .clickable { viewModel.onHintDismissed() }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
