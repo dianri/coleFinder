@@ -42,7 +42,6 @@ class SupabaseColegioRepository @Inject constructor(
     override suspend fun fetchNearbyColegios(
         lat: Double,
         lon: Double,
-        limit: Int,
         titularidades: Set<TitularidadFiltro>,
         tipos: Set<TipoCentroFiltro>
     ): Result<List<ColegioConDistancia>> = withContext(Dispatchers.IO) {
@@ -53,7 +52,6 @@ class SupabaseColegioRepository @Inject constructor(
             val params = buildJsonObject {
                 put("p_lat", lat)
                 put("p_lon", lon)
-                put("p_limit", limit)
                 if (arrayTitularidad != null) putJsonArray("p_titularidades") {
                     arrayTitularidad.forEach { add(it) }
                 }

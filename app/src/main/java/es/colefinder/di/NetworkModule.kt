@@ -25,6 +25,9 @@ object NetworkModule {
 /**
  * Módulo separado para bindings de repositorios.
  * Permite sustituir SupabaseColegioRepository por una implementación fake en tests.
+ *
+ * [es.colefinder.data.repository.AppConfigRepository] se registra por constructor
+ * (`@Inject` + `@Singleton`), igual que [es.colefinder.data.repository.UserPreferencesRepository].
  */
 @Module
 @InstallIn(SingletonComponent::class)

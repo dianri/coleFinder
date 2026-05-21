@@ -6,6 +6,15 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Added
+- Actualización forzada configurable: tablas `app_config` en esquemas `staging` y `public`, `AppConfigRepository` y comprobación en arranque con Play In-App Updates (IMMEDIATE o FLEXIBLE según remoto)
+
+### Changed
+- Config de actualización: una sola tabla `app_config` por entorno (PRE/PROD); eliminadas tablas redundantes `staging_app_config` (interno)
+- `app_config` vuelve a formato key/value extensible; nuevo parámetro `nearby_colegios_limit` (POI en mapa)
+- RPC `nearby_colegios` lee el límite desde `app_config` e ignora `p_limit` del cliente (apps en pruebas siguen funcionando)
+- La app ya no envía `p_limit` en la carga de centros cercanos (interno)
+
 ## [1.0.1] - 2026-05-12
 
 ### Fixed
