@@ -8,17 +8,18 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppConfigRepositoryTest {
 
     @Test
-    fun getUpdateConfig_parsesKeyValueRowsFromSupabase() = runBlocking {
+    fun getUpdateConfig_parsesKeyValueRowsFromSupabase() = runTest {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
-            assert(path.contains("app_config")) { "path=$path" }
+            assertTrue(path.contains("app_config"))
             respond(
                 content = """
                     [
@@ -47,7 +48,7 @@ class AppConfigRepositoryTest {
     }
 
     @Test
-    fun getUpdateConfig_onNetworkError_returnsSafeDefaults() = runBlocking {
+    fun getUpdateConfig_onNetworkError_returnsSafeDefaults() = runTest {
         val engine = MockEngine {
             respond(
                 content = "error",

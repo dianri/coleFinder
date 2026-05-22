@@ -52,8 +52,10 @@ class AppConfigRepository @Inject constructor(
         try {
             val byKey = getConfigMap()
             val minVersionCode = byKey[AppConfigKeys.MIN_VERSION_CODE]?.toIntOrNull() ?: 0
-            val updateType = byKey[AppConfigKeys.UPDATE_TYPE]?.trim()?.uppercase()
-                .takeUnless { it.isNullOrBlank() }
+            val updateType = byKey[AppConfigKeys.UPDATE_TYPE]
+                ?.trim()
+                ?.uppercase()
+                ?.takeIf { it == "FLEXIBLE" || it == "IMMEDIATE" }
                 ?: "FLEXIBLE"
 
             AppUpdateConfig(

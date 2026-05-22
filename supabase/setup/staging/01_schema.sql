@@ -136,4 +136,10 @@ CREATE POLICY staging_app_config_select_authenticated ON staging.app_config
 -- Permisos de tabla
 -- =============================================================================
 GRANT SELECT ON TABLE staging.colegios TO anon, authenticated;
+
+DROP POLICY IF EXISTS staging_colegios_select_authenticated ON staging.colegios;
+CREATE POLICY staging_colegios_select_authenticated ON staging.colegios
+  FOR SELECT TO authenticated
+  USING (true);
+
 GRANT SELECT ON TABLE staging.app_config TO anon, authenticated;

@@ -82,7 +82,6 @@ Supabase nuevo.
 > **Datos de muestra:** los scripts incluyen ~500 centros del centro de
 > Madrid como muestra funcional. La app publicada en Google Play conecta
 > al backend de producción con el dataset nacional completo.
-
 > Los scripts de `supabase/scripts/` son de mantenimiento interno
 > (imports, promotes). No son necesarios para levantar el entorno
 > desde cero.

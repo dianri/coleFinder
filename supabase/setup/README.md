@@ -9,7 +9,7 @@ Instrucciones para replicar el backend de ColeFinder en un proyecto Supabase nue
 
 ## Estructura de carpetas
 
-```
+```text
 supabase/setup/
 ├── README.md
 ├── public/
@@ -58,7 +58,7 @@ con error `406 Not Acceptable`.
 Rellena `secrets.properties` (copia desde `secrets.defaults.properties`)
 con los valores de tu proyecto Supabase:
 
-```
+```text
 URL base del proyecto — SIN /rest/v1 ni ningún sufijo
 SUPABASE_URL_PRE=https://<tu-proyecto>.supabase.co
 SUPABASE_URL_PROD=https://<tu-proyecto>.supabase.co

@@ -6,6 +6,13 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Fixed
+- Setup staging: política RLS `SELECT` para `authenticated` en `staging.colegios` (alineada con `GRANT`) (interno)
+- Migración `app_config`: RLS para `anon`, creación idempotente del enum y `DROP TRIGGER` antes de recrear triggers (interno)
+
+### Changed
+- `AppConfigRepository`: `update_type` remoto solo acepta `FLEXIBLE` o `IMMEDIATE`; resto → fallback `FLEXIBLE` (interno)
+
 ## [1.1.0] - 2026-05-22
 
 ### Added

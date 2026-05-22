@@ -1,7 +1,16 @@
 -- app_config: parámetros remotos extensibles (key / value)
 -- Una fila por parámetro. Esquema según entorno: staging (PRE) | public (PROD)
 
-CREATE TYPE public.app_update_type AS ENUM ('FLEXIBLE', 'IMMEDIATE');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = 'public' AND t.typname = 'app_update_type'
+  ) THEN
+    CREATE TYPE public.app_update_type AS ENUM ('FLEXIBLE', 'IMMEDIATE');
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS staging.app_config (
   id serial PRIMARY KEY,
@@ -39,6 +48,20 @@ CREATE TABLE IF NOT EXISTS public.app_config (
   )
 );
 
+ALTER TABLE staging.app_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS staging_app_config_select_anon ON staging.app_config;
+CREATE POLICY staging_app_config_select_anon ON staging.app_config
+  FOR SELECT TO anon USING (true);
+
+DROP POLICY IF EXISTS public_app_config_select_anon ON public.app_config;
+CREATE POLICY public_app_config_select_anon ON public.app_config
+  FOR SELECT TO anon USING (true);
+
+GRANT SELECT ON TABLE staging.app_config TO anon;
+GRANT SELECT ON TABLE public.app_config TO anon;
+
 INSERT INTO staging.app_config (key, value, value_enum) VALUES
   ('min_version_code', '1', NULL),
   ('update_type', 'FLEXIBLE', 'FLEXIBLE'),
@@ -72,10 +95,12 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_staging_app_config_sync_value_enum ON staging.app_config;
 CREATE TRIGGER trg_staging_app_config_sync_value_enum
   BEFORE INSERT OR UPDATE ON staging.app_config
   FOR EACH ROW EXECUTE FUNCTION public.app_config_sync_value_enum();
 
+DROP TRIGGER IF EXISTS trg_public_app_config_sync_value_enum ON public.app_config;
 CREATE TRIGGER trg_public_app_config_sync_value_enum
   BEFORE INSERT OR UPDATE ON public.app_config
   FOR EACH ROW EXECUTE FUNCTION public.app_config_sync_value_enum();
