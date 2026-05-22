@@ -11,6 +11,7 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 - Scripts `supabase/setup/` para replicar backend en proyecto Supabase nuevo (esquemas `public`/`staging`, RPC, `app_config`, seed ~500 colegios del centro de Madrid)
 
 ### Changed
+- README raíz y `supabase/setup/README.md`: guía de backend, Google Play, presentación TFM y troubleshooting
 - Texto del hint de long press en el mapa: «Mantén pulsado el mapa para buscar centros cerca»
 - `app_config.value_enum` (enum FLEXIBLE|IMMEDIATE) para editar `update_type` con selector en Supabase; `value` se sincroniza por trigger (interno)
 - Config de actualización: una sola tabla `app_config` por entorno (PRE/PROD); eliminadas tablas redundantes `staging_app_config` (interno)

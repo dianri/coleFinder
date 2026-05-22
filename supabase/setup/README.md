@@ -7,6 +7,23 @@ Instrucciones para replicar el backend de ColeFinder en un proyecto Supabase nue
 | **`staging`** | `pre` | Desarrollo y pruebas (cabecera `Content-Profile: staging`) |
 | **`public`** | `prod` | Producción |
 
+## Estructura de carpetas
+
+```
+supabase/setup/
+├── README.md
+├── public/
+│   ├── 01_schema.sql
+│   ├── 02_functions.sql
+│   ├── 03_app_config.sql
+│   └── 04_seed_madrid.sql
+└── staging/
+    ├── 01_schema.sql
+    ├── 02_functions.sql
+    ├── 03_app_config.sql
+    └── 04_seed_madrid.sql
+```
+
 ## 1. Requisitos previos
 
 - Cuenta en [Supabase](https://supabase.com) (o instancia self-hosted con PostgREST).
@@ -122,21 +139,23 @@ En la app PRE, PostgREST debe recibir `Content-Profile: staging` en las llamadas
 
 ## 5. Nota sobre los datos
 
-Los ficheros `04_seed_madrid.sql` contienen datos públicos del Ministerio y de la Comunidad de Madrid (`comunidad_madrid`), limitados a ~500 centros para facilitar la instalación. No sustituyen la importación nacional completa.
+Los ficheros `04_seed_madrid.sql` contienen ~500 centros educativos
+del **centro de Madrid capital** (ordenados por proximidad a Puerta
+del Sol), extraídos de fuentes públicas del Ministerio de Educación
+y de la Comunidad de Madrid.
 
-## Estructura de carpetas
+Esta muestra es suficiente para probar todas las funcionalidades de
+la app: mapa, búsqueda, filtros y detalle de centro.
 
-```
-supabase/setup/
-├── README.md
-├── public/
-│   ├── 01_schema.sql
-│   ├── 02_functions.sql
-│   ├── 03_app_config.sql
-│   └── 04_seed_madrid.sql
-└── staging/
-    ├── 01_schema.sql
-    ├── 02_functions.sql
-    ├── 03_app_config.sql
-    └── 04_seed_madrid.sql
-```
+> **La app publicada en Google Play** conecta al backend de producción,
+> que incluye el dataset nacional completo con miles de centros de toda
+> España.
+
+## 6. Solución de problemas frecuentes
+
+| Error | Causa | Solución |
+|:---|:---|:---|
+| `406 Not Acceptable — Invalid schema: staging` | El esquema `staging` no está expuesto en la API | Sigue el paso **⚠️ Configuración previa** de este README |
+| `IllegalStateException: url should not contain rest/v1` | La URL en `secrets.properties` incluye el sufijo `/rest/v1` | Usa solo el dominio base: `https://<proyecto>.supabase.co` |
+| `42601: INSERT has more target columns than expressions` | Versión antigua del seed con 15 valores por fila en vez de 16 | Usa los archivos actuales del repositorio (ya corregido) |
+| La RPC devuelve menos centros de los esperados | `nearby_colegios_limit` en `app_config` es bajo | Ejecuta: `UPDATE public.app_config SET value='200' WHERE key='nearby_colegios_limit';` |
