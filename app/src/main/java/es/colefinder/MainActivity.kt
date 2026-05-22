@@ -1,12 +1,10 @@
 package es.colefinder
 
-import android.app.Activity
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -16,10 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
-import com.google.android.play.core.appupdate.AppUpdateManagerFactory
-import com.google.android.play.core.appupdate.AppUpdateOptions
 import com.google.android.play.core.install.model.AppUpdateType
-import com.google.android.play.core.install.model.UpdateAvailability
 import dagger.hilt.android.AndroidEntryPoint
 import es.colefinder.data.repository.AppConfigRepository
 import es.colefinder.ui.map.MapScreen
@@ -38,13 +33,6 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var inAppUpdateManager: InAppUpdateManager
     private val inAppUpdateState = mutableStateOf(InAppUpdateUiState())
-
-    private val updateResultLauncher =
-        registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-            if (result.resultCode != Activity.RESULT_OK) {
-                Log.w(TAG, "El usuario canceló o falló la actualización")
-            }
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,27 +91,7 @@ class MainActivity : ComponentActivity() {
                 AppUpdateType.FLEXIBLE
             }
 
-            val appUpdateManager = AppUpdateManagerFactory.create(this)
-            appUpdateManager.appUpdateInfo
-                .addOnSuccessListener { info ->
-                    if (info.updateAvailability() != UpdateAvailability.UPDATE_AVAILABLE ||
-                        !info.isUpdateTypeAllowed(updateType)
-                    ) {
-                        return@addOnSuccessListener
-                    }
-                    try {
-                        appUpdateManager.startUpdateFlowForResult(
-                            info,
-                            updateResultLauncher,
-                            AppUpdateOptions.newBuilder(updateType).build(),
-                        )
-                    } catch (e: Exception) {
-                        Log.w(TAG, "startUpdateFlowForResult", e)
-                    }
-                }
-                .addOnFailureListener { e ->
-                    Log.w(TAG, "appUpdateInfo en checkForUpdates", e)
-                }
+            inAppUpdateManager.startConfiguredUpdateFlow(updateType)
         } catch (e: Exception) {
             Log.w(TAG, "checkForUpdates", e)
         }

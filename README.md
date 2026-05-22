@@ -30,6 +30,7 @@ El módulo es `:app`, namespace `es.colefinder`. Organización real del código 
 | `data/model/` | Modelos de dominio (`Colegio`) y DTOs (`NearbyColegioDto`, `ColegioSearchDto`) |
 | `data/network/` | Clasificación de errores de red (`ColegiosLoadError`, `ColegiosLoadException`) |
 | `di/` | Módulos Hilt (`NetworkModule`, `RepositoryModule`) |
+| `update/` | Sistema de actualizaciones in-app: `InAppUpdateManager` (gestiona una única instancia de `AppUpdateManager`, soporta flujos FLEXIBLE e IMMEDIATE), `InAppUpdateUiState` (estado UI del banner) |
 
 No hay un paquete `domain/` separado.
 
