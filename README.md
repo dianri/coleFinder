@@ -6,6 +6,7 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin&logoColor=white)
 ![Android](https://img.shields.io/badge/Android-Jetpack%20Compose-4285F4?logo=android&logoColor=white)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
+[![Presentación](https://img.shields.io/badge/Presentación-Gamma-6C47FF?logoColor=white)](https://gamma.app/docs/ColeFinder-yj5kcsgludb2gd4)
 
 ## Stack tecnológico
 
@@ -29,6 +30,7 @@ El módulo es `:app`, namespace `es.colefinder`. Organización real del código 
 | `data/model/` | Modelos de dominio (`Colegio`) y DTOs (`NearbyColegioDto`, `ColegioSearchDto`) |
 | `data/network/` | Clasificación de errores de red (`ColegiosLoadError`, `ColegiosLoadException`) |
 | `di/` | Módulos Hilt (`NetworkModule`, `RepositoryModule`) |
+| `update/` | Sistema de actualizaciones in-app: `InAppUpdateManager` (gestiona una única instancia de `AppUpdateManager`, soporta flujos FLEXIBLE e IMMEDIATE), `InAppUpdateUiState` (estado UI del banner) |
 
 No hay un paquete `domain/` separado.
 
@@ -58,6 +60,31 @@ MAPS_API_KEY=<tu-clave-maps>
 
 - **Supabase**: URL base del proyecto (sin sufijos `/rest/v1`; el SDK los resuelve). Puedes usar el host `*.supabase.co` o un dominio custom si tu infraestructura lo expone así.
 - **Google Maps**: la clave se inyecta en el manifest mediante el [Secrets Gradle Plugin](https://developers.google.com/maps/documentation/android-sdk/secrets-gradle-plugin); el placeholder en `AndroidManifest.xml` es `${MAPS_API_KEY}`. No hace falta pegar la clave a mano en el XML si `secrets.properties` está bien configurado.
+
+> Necesitas un proyecto Supabase activo con el backend configurado.
+> Ver [`supabase/setup/README.md`](./supabase/setup/README.md).
+
+## Backend (Supabase)
+
+El backend es un proyecto [Supabase](https://supabase.com) con PostGIS.
+La carpeta [`supabase/setup/`](./supabase/setup/) contiene scripts SQL
+idempotentes para levantar el backend desde cero en cualquier proyecto
+Supabase nuevo.
+
+**Para replicar el entorno:** sigue las instrucciones de
+[`supabase/setup/README.md`](./supabase/setup/README.md). En resumen:
+
+1. Crea un proyecto en [supabase.com](https://supabase.com) y activa la extensión **PostGIS** (*Database → Extensions*).
+2. Si usas supabase.com (hosted), expone el esquema `staging` en **INTEGRATIONS → Data API → Settings → Exposed Schemas** antes de ejecutar ningún script.
+3. Ejecuta los 8 scripts de `supabase/setup/` en el SQL Editor en el orden indicado en el README de esa carpeta.
+4. Rellena `secrets.properties` con la URL base y la anon key del proyecto (ver sección anterior).
+
+> **Datos de muestra:** los scripts incluyen ~500 centros del centro de
+> Madrid como muestra funcional. La app publicada en Google Play conecta
+> al backend de producción con el dataset nacional completo.
+> Los scripts de `supabase/scripts/` son de mantenimiento interno
+> (imports, promotes). No son necesarios para levantar el entorno
+> desde cero.
 
 ## Compilación
 
@@ -120,6 +147,21 @@ cd coleFinder
 ```
 
 Crea `secrets.properties` como se indica arriba antes de compilar.
+
+## Despliegue
+
+La app está publicada en **Google Play** (flavor `prod`, esquema `public`):
+
+> 🔗 **[ColeFinder en Google Play](https://play.google.com/store/apps/details?id=es.colefinder)**
+
+La versión publicada conecta al backend de producción con el dataset
+nacional completo de centros educativos de toda España.
+
+## Presentación del proyecto
+
+Presentación del TFM realizada con Gamma:
+
+> 🔗 **[Ver presentación](https://gamma.app/docs/ColeFinder-yj5kcsgludb2gd4)**
 
 ## Flujo de ramas
 

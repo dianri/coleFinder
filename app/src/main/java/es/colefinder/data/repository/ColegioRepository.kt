@@ -21,7 +21,7 @@ interface ColegioRepository {
      *
      * @param lat Latitud del punto de referencia.
      * @param lon Longitud del punto de referencia.
-     * @param limit Número máximo de resultados (por defecto 200).
+     * El número de POI lo define la RPC `nearby_colegios` leyendo `nearby_colegios_limit` en `app_config`.
      * @param titularidades Filtros de titularidad activos.
      * @param tipos Filtros de tipo de centro activos.
      * @return Lista ordenada por distancia con metadatos precalculados.
@@ -31,7 +31,6 @@ interface ColegioRepository {
     suspend fun fetchNearbyColegios(
         lat: Double,
         lon: Double,
-        limit: Int = 200,
         titularidades: Set<TitularidadFiltro> = setOf(TitularidadFiltro.TODOS),
         tipos: Set<TipoCentroFiltro> = setOf(TipoCentroFiltro.TODOS)
     ): Result<List<ColegioConDistancia>>

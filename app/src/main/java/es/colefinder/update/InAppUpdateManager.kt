@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
 import com.google.android.play.core.install.InstallStateUpdatedListener
 import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.InstallStatus
@@ -97,6 +98,33 @@ class InAppUpdateManager(
             }
             .addOnFailureListener { e ->
                 Log.w(TAG, "No se pudo obtener AppUpdateInfo (normal fuera de Play o sin red)", e)
+            }
+    }
+
+    /**
+     * Flujo de actualización según config remota (Supabase).
+     * Usar cuando VERSION_CODE es menor que min_version_code (IMMEDIATE o FLEXIBLE).
+     */
+    fun startConfiguredUpdateFlow(updateType: Int) {
+        appUpdateManager.appUpdateInfo
+            .addOnSuccessListener { info ->
+                if (info.updateAvailability() != UpdateAvailability.UPDATE_AVAILABLE ||
+                    !info.isUpdateTypeAllowed(updateType)
+                ) {
+                    return@addOnSuccessListener
+                }
+                try {
+                    appUpdateManager.startUpdateFlowForResult(
+                        info,
+                        updateFlowLauncher,
+                        AppUpdateOptions.newBuilder(updateType).build(),
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "startUpdateFlowForResult (configured)", e)
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "appUpdateInfo en startConfiguredUpdateFlow", e)
             }
     }
 

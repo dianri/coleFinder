@@ -1,6 +1,7 @@
 package es.colefinder
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -12,15 +13,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
+import com.google.android.play.core.install.model.AppUpdateType
 import dagger.hilt.android.AndroidEntryPoint
+import es.colefinder.data.repository.AppConfigRepository
 import es.colefinder.ui.map.MapScreen
 import es.colefinder.ui.theme.ColeFinderTheme
 import es.colefinder.ui.update.InAppUpdateBanner
 import es.colefinder.update.InAppUpdateManager
 import es.colefinder.update.InAppUpdateUiState
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var appConfigRepository: AppConfigRepository
 
     private lateinit var inAppUpdateManager: InAppUpdateManager
     private val inAppUpdateState = mutableStateOf(InAppUpdateUiState())
@@ -29,6 +38,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         inAppUpdateManager = InAppUpdateManager(this) { inAppUpdateState.value = it }
+
+        lifecycleScope.launch {
+            checkForUpdates()
+        }
 
         setContent {
             val state by inAppUpdateState
@@ -61,5 +74,30 @@ class MainActivity : ComponentActivity() {
             inAppUpdateManager.unregisterListener()
         }
         super.onDestroy()
+    }
+
+    /**
+     * Actualización forzada según [AppConfigRepository] (Supabase).
+     * Convive con [InAppUpdateManager]: este flujo actúa si VERSION_CODE &lt; min_version_code.
+     */
+    private suspend fun checkForUpdates() {
+        try {
+            val config = appConfigRepository.getUpdateConfig()
+            if (BuildConfig.VERSION_CODE >= config.minVersionCode) return
+
+            val updateType = if (config.updateType == "IMMEDIATE") {
+                AppUpdateType.IMMEDIATE
+            } else {
+                AppUpdateType.FLEXIBLE
+            }
+
+            inAppUpdateManager.startConfiguredUpdateFlow(updateType)
+        } catch (e: Exception) {
+            Log.w(TAG, "checkForUpdates", e)
+        }
+    }
+
+    private companion object {
+        private const val TAG = "InAppUpdate"
     }
 }

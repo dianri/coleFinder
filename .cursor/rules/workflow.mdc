@@ -81,12 +81,38 @@ Si se detectan cambios accidentales fuera del alcance, parar y avisar al usuario
 
 ## Revisión de reglas Cursor antes de commit
 
-Cada vez que se vaya a **realizar un commit** (por petición explícita del usuario o como cierre de una tarea con cambios versionables):
+⚠️ OBLIGATORIO. No es opcional ni se puede omitir en silencio.
 
-1. **Revisar** si el diff / el alcance de la tarea hace necesario u opcional pero recomendable actualizar los archivos bajo `.cursor/rules/` (`architecture.mdc`, `workflow.mdc`, `data-supabase.mdc`, `ui-compose.mdc`, etc.). Criterios orientativos: nueva arquitectura o archivos clave, tests o convenciones nuevas, cambios en Supabase/RPC/DTOs, Gradle (flavors, release, ProGuard), flujos del agente o checklist que hayan quedado desactualizados.
-2. Si **no** aplica ninguna actualización: decirlo en una frase clara (p. ej. «Reglas `.cursor/rules/`: sin cambios necesarios») y proceder con el commit si corresponde.
-3. Si **sí** aplica: **proponer** al usuario las ediciones concretas (contenido o diff de los `.mdc` afectados) o aplicarlas en el workspace como cambios revisables, para que el usuario las **acepte o rechace** en Cursor. No omitir este paso ni asumir en silencio que las reglas siguen al día.
-4. **Orden sugerido:** primero la revisión y la propuesta de reglas (si hay algo que contar); el usuario puede aceptar reglas y código en el mismo batch o pedir commits separados. El agente no debe presentar un commit como “cerrado” sin haber hecho al menos la comprobación del punto 1 y haber comunicado el resultado (2 o 3).
+Antes de cualquier commit, y también al cerrar cualquier tarea aunque
+no haya commit inmediato, el agente DEBE:
+
+1. Revisar el diff completo de la tarea y comprobar si alguno de estos
+   criterios aplica:
+   - Se añadió, eliminó o cambió la firma de un repositorio, ViewModel,
+     RPC, DTO, tabla o esquema de Supabase.
+   - Se añadieron o eliminaron archivos clave del proyecto.
+   - Se cambió una convención de tests, compilación o versionado.
+   - Se modificó build.gradle.kts, flavors, BuildConfig o dependencias.
+   - Se añadió un flujo nuevo de negocio o se cambió uno existente.
+
+2. Si algún criterio aplica:
+   PROPONER al usuario las ediciones concretas a los .mdc afectados
+   (architecture.mdc, data-supabase.mdc, workflow.mdc, ui-compose.mdc).
+   No asumir en silencio que las reglas están al día.
+   No hacer el commit sin haber presentado la propuesta.
+
+3. Si ningún criterio aplica:
+   Escribir explícitamente: "Reglas .cursor/rules/: sin cambios necesarios"
+   y solo entonces proceder con el commit.
+
+4. Si el usuario rechaza la actualización de reglas:
+   Anotarlo y proceder con el commit igualmente.
+   No bloquear el commit por las reglas.
+
+❌ NUNCA cerrar una tarea como "completada" o "hecho" sin haber
+ejecutado los pasos 1-3. Aunque la compilación pase y los tests
+estén en verde, la tarea no está cerrada hasta que las reglas
+hayan sido revisadas y el resultado comunicado al usuario.
 
 ---
 

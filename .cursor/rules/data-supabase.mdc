@@ -9,6 +9,7 @@ alwaysApply: true
 - Inyección de dependencias: Hilt.
 - Cliente centralizado: `SupabaseClient` (provisto por `NetworkModule`).
 - Acceso a datos: `ColegioRepository` (interfaz) / `SupabaseColegioRepository` (implementación).
+- Config remota: tabla `app_config` + `AppConfigRepository` (lectura desde la app).
 
 ## Arquitectura PRE/PROD (Separación de Esquemas)
 
@@ -73,6 +74,48 @@ Los campos `tipo_centro_normalizado` y `titularidad_normalizada` se poblaron des
 
 Si se añaden nuevas fuentes o se reimportan datos, aplicar los mismos UPDATEs con `UPDATE [<schema>].colegios SET ... FROM <tabla_import> WHERE fuente='...' AND fuente_id = <key>`.
 
+## Tabla de configuración: `staging.app_config` / `public.app_config`
+
+Parámetros remotos extensibles (una fila por clave). Esquema según flavor Android:
+- **PRE** → `staging.app_config`
+- **PROD** → `public.app_config`
+
+### Columnas
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | `serial` | PK |
+| `key` | `text` UNIQUE | Nombre del parámetro |
+| `value` | `text` | Valor en texto; **la app siempre lee esta columna** vía PostgREST |
+| `value_enum` | `public.app_update_type` | Solo fila `update_type`; enum `FLEXIBLE` \| `IMMEDIATE` (selector en Supabase Table Editor) |
+| `updated_at` | `timestamptz` | Actualizado por trigger en INSERT/UPDATE |
+
+Tipo Postgres: `CREATE TYPE public.app_update_type AS ENUM ('FLEXIBLE', 'IMMEDIATE');`
+
+### Parámetros actuales
+
+| `key` | `value` (ejemplo) | Consumidor |
+|---|---|---|
+| `min_version_code` | `1` | App — `MainActivity` / `AppConfigRepository.getUpdateConfig()` |
+| `update_type` | `FLEXIBLE` | App — Play In-App Update (IMMEDIATE o FLEXIBLE) |
+| `nearby_colegios_limit` | `200` | RPC `nearby_colegios` (mismo esquema) |
+
+### Reglas de edición y sincronización
+
+- **`update_type`**: editar en Supabase la columna **`value_enum`** (dropdown). Trigger `app_config_sync_value_enum`
+  copia `value_enum` → `value` antes de guardar. La app **solo lee `value`**.
+- **`value_enum`**: obligatorio solo si `key = 'update_type'`; debe ser `NULL` en el resto de filas (CHECK).
+- Otros parámetros: solo columna `value` (texto; CHECK exige dígitos en `min_version_code` y `nearby_colegios_limit`).
+- Nuevos parámetros: `INSERT` con nuevo `key` / `value`; añadir CHECK si el valor debe estar acotado.
+
+### Seguridad
+
+- RLS habilitado en ambos esquemas.
+- Políticas `SELECT` para `anon` y `authenticated`.
+- `GRANT SELECT` a `anon` y `authenticated`.
+
+SQL de referencia: `docs/supabase/app_config_migration.sql`.
+
 ## RPC: `nearby_colegios`
 
 Función SQL en Supabase que devuelve los N centros más cercanos usando índice espacial GIST (PostGIS).
@@ -95,15 +138,21 @@ distancia_metros, es_dificil_desempeno, jornada_tipo, es_rural
 
 - Los filtros usan `= ANY(array)` en SQL. Si el array es NULL, no se aplica restricción.
 - Orden por cercanía usando operador espacial `<->` (KNN sobre índice GIST `idx_colegios_location`).
-- La app siempre llama con `p_limit = 200`.
+- **Límite de resultados (POI)**: la función lee `nearby_colegios_limit` de `app_config` del **mismo esquema**
+  (`staging` o `public`). Si falta, es inválido o &lt; 1 → fallback **200**. Tope máximo **500** (`LEAST`).
+- **`p_limit` en la firma se conserva por compatibilidad** (apps antiguas en pruebas pueden seguir enviándolo),
+  pero **la función lo ignora** y usa solo el valor de la tabla. **No reintroducir `p_limit` en Kotlin.**
 - Se invoca mediante `SupabaseColegioRepository` (nunca directamente desde el ViewModel):
   ```kotlin
+  // params: p_lat, p_lon, p_titularidades?, p_tipos? — sin p_limit
   supabase.postgrest.rpc("nearby_colegios", params) {
       schema = BuildConfig.SUPABASE_SCHEMA
   }.decodeList<NearbyColegioDto>()
   ```
 - Los arrays se construyen en Kotlin con `Set<TitularidadFiltro>.toRpcArray()` (en `CentroFiltros.kt`).
 - Si el set de filtros contiene `TODOS` o está vacío, el parámetro no se incluye (null en BD).
+
+Script SQL de la RPC: `supabase/scripts/nearby_colegios_limit_from_app_config.sql`.
 
 ### Regla crítica: Promoción y Coexistencia
 1. Si se modifica la firma, primero aplicar en `staging`.
@@ -126,10 +175,17 @@ WHERE proname = 'nearby_colegios';
 ### `ColegioRepository` (interfaz — `data/repository/`)
 Contrato para acceso a datos de centros. Ver detalles en `architecture.mdc`.
 
+### `AppConfigRepository` (`data/repository/`, `@Singleton`)
+Lectura de `app_config` vía PostgREST (`from("app_config").select key, value`).
+- `getConfigMap()` — todas las filas como `Map<String, String>`.
+- `getUpdateConfig()` — `AppUpdateConfig` desde claves `min_version_code` y `update_type` (lee columna `value`).
+- Fallback en error: `minVersionCode = 0`, `updateType = "FLEXIBLE"` (la app no debe bloquearse).
+- Inyectado en **`MainActivity`**, no en `MapViewModel`.
+
 ### `SupabaseColegioRepository` (`data/repository/`, `@Singleton`)
 Implementación sobre Supabase. Responsabilidades:
-- **`fetchNearbyColegios`**: construir `JsonObject` con parámetros, llamar a la RPC con el schema correcto,
-  aplicar `.distinctBy { it.id }`, mapear `NearbyColegioDto` → `ColegioConDistancia`.
+- **`fetchNearbyColegios`**: `JsonObject` con `p_lat`, `p_lon` y filtros; **sin `p_limit`**. RPC con schema correcto,
+  `.distinctBy { it.id }`, mapeo `NearbyColegioDto` → `ColegioConDistancia`.
   Errores se clasifican con `classifyColegiosLoadFailure()` y se devuelven como
   `Result.failure(ColegiosLoadException(...))` con categoría y mensaje de usuario.
 - **`searchColegiosByName`**: consulta PostgREST directa (`from(schema, "colegios").select { ilike("nombre", ...) }`),
@@ -185,6 +241,21 @@ data class ColegioSearchDto(
 )
 ```
 
+### Config remota (`data/model/`)
+
+```kotlin
+@Serializable
+data class AppConfigRowDto(val key: String, val value: String)
+
+data class AppUpdateConfig(val minVersionCode: Int, val updateType: String)
+
+object AppConfigKeys {
+    const val MIN_VERSION_CODE = "min_version_code"
+    const val UPDATE_TYPE = "update_type"
+    const val NEARBY_COLEGIOS_LIMIT = "nearby_colegios_limit"  // solo RPC; la app no lo lee hoy
+}
+```
+
 ### `NearbyColegioDto` (DTO de RPC — `data/model/NearbyColegioDto.kt`)
 ```kotlin
 @Serializable
@@ -236,7 +307,8 @@ Los errores de `fetchNearbyColegios` se clasifican en `ColegiosLoadCategory`:
 ## Tests unitarios relacionados
 
 - `app/src/test/java/es/colefinder/data/SupabaseHeaderTest.kt`: comprueba que una llamada `rpc` con `schema` (p. ej. `staging`) envía las cabeceras de perfil esperadas en la petición Ktor mock (`Content-Profile` / `Accept-Profile`).
-- `app/src/test/java/es/colefinder/data/ColegioRepositoryTest.kt`: ejercita `SupabaseColegioRepository` con `MockEngine` — respuestas JSON de `nearby_colegios` y de `from("colegios")` / búsqueda, lista vacía, error de red e HTTP 500.
+- `app/src/test/java/es/colefinder/data/ColegioRepositoryTest.kt`: ejercita `SupabaseColegioRepository` con `MockEngine` — respuestas JSON de `nearby_colegios` y de `from("colegios")` / búsqueda, lista vacía, error de red e HTTP 500. `fetchNearbyColegios` **sin** argumento `limit`.
+- `app/src/test/java/es/colefinder/data/AppConfigRepositoryTest.kt`: parseo key/value y defaults en error de red.
 
 ## Rendimiento y arquitectura de datos
 - Evitar cálculos pesados en el Main Thread.
@@ -252,6 +324,6 @@ Los errores de `fetchNearbyColegios` se clasifican en `ColegiosLoadCategory`:
 - No introducir otra base de datos local diferente sin que se solicite explícitamente.
 
 ## Seguridad
-- Las tablas en `public` expuestas a PostgREST deben tener RLS habilitado.
-- `colegios`: solo lectura para el rol de la app.
+- Las tablas en `public` y `staging` expuestas a PostgREST deben tener RLS habilitado.
+- `colegios` y `app_config`: solo lectura (`SELECT`) para el rol de la app (`anon`).
 - No exponer credenciales de servicio en el cliente.
