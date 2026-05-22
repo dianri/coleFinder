@@ -6,6 +6,29 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+### Fixed
+- Setup staging: política RLS `SELECT` para `authenticated` en `staging.colegios` (alineada con `GRANT`) (interno)
+- Migración `app_config`: RLS para `anon`, creación idempotente del enum y `DROP TRIGGER` antes de recrear triggers (interno)
+
+### Changed
+- `AppConfigRepository`: `update_type` remoto solo acepta `FLEXIBLE` o `IMMEDIATE`; resto → fallback `FLEXIBLE` (interno)
+
+## [1.1.0] - 2026-05-22
+
+### Added
+- Actualización forzada configurable: tablas `app_config` en esquemas `staging` y `public`, `AppConfigRepository` y comprobación en arranque con Play In-App Updates (IMMEDIATE o FLEXIBLE según remoto)
+- Scripts `supabase/setup/` para replicar backend en proyecto Supabase nuevo (esquemas `public`/`staging`, RPC, `app_config`, seed ~500 colegios del centro de Madrid)
+
+### Changed
+- README raíz y `supabase/setup/README.md`: guía de backend, Google Play, presentación TFM y troubleshooting
+- Texto del hint de long press en el mapa: «Mantén pulsado el mapa para buscar centros cerca»
+- `app_config.value_enum` (enum FLEXIBLE|IMMEDIATE) para editar `update_type` con selector en Supabase; `value` se sincroniza por trigger (interno)
+- Config de actualización: una sola tabla `app_config` por entorno (PRE/PROD); eliminadas tablas redundantes `staging_app_config` (interno)
+- `app_config` vuelve a formato key/value extensible; nuevo parámetro `nearby_colegios_limit` (POI en mapa)
+- RPC `nearby_colegios` lee el límite desde `app_config` e ignora `p_limit` del cliente (apps en pruebas siguen funcionando)
+- La app ya no envía `p_limit` en la carga de centros cercanos (interno)
+- Una sola instancia de `AppUpdateManager` en `InAppUpdateManager` para flujos flexibles y forzados (interno)
+
 ## [1.0.1] - 2026-05-12
 
 ### Fixed

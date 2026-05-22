@@ -751,7 +751,9 @@ fun MapScreen(
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 tonalElevation = 6.dp,
                 shadowElevation = 6.dp,
-                modifier = Modifier.padding(horizontal = 32.dp)
+                modifier = Modifier
+                    .padding(horizontal = 32.dp)
+                    .clickable { viewModel.onHintDismissed() }
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -765,7 +767,7 @@ fun MapScreen(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Mantén pulsado para buscar centros aquí",
+                        text = "Mantén pulsado el mapa para buscar centros cerca",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )

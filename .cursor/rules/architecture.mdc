@@ -30,12 +30,14 @@ alwaysApply: true
 ## Capas de la arquitectura
 
 ```
-MapScreen (Compose)
-    └── MapViewModel (HiltViewModel)
-            ├── ColegioRepository (interfaz)
-            │       └── SupabaseColegioRepository (implementación, @Singleton)
-            │               └── SupabaseClient (Hilt → NetworkModule)
-            └── UserPreferencesRepository (@Singleton, DataStore)
+MainActivity (Compose host)
+    ├── AppConfigRepository (@Singleton, @Inject) — actualización forzada en arranque
+    └── MapScreen (Compose)
+            └── MapViewModel (HiltViewModel)
+                    ├── ColegioRepository (interfaz)
+                    │       └── SupabaseColegioRepository (implementación, @Singleton)
+                    │               └── SupabaseClient (Hilt → NetworkModule)
+                    └── UserPreferencesRepository (@Singleton, DataStore)
 ```
 
 ### `ColegioRepository` (interfaz en `data/repository/`)
@@ -47,7 +49,6 @@ interface ColegioRepository {
     suspend fun fetchNearbyColegios(
         lat: Double,
         lon: Double,
-        limit: Int = 200,
         titularidades: Set<TitularidadFiltro> = setOf(TitularidadFiltro.TODOS),
         tipos: Set<TipoCentroFiltro> = setOf(TipoCentroFiltro.TODOS)
     ): Result<List<ColegioConDistancia>>
@@ -59,10 +60,15 @@ interface ColegioRepository {
 }
 ```
 
+El número máximo de POI en el mapa **no** se pasa desde la app: lo define la RPC `nearby_colegios`
+leyendo `nearby_colegios_limit` en `app_config` (ver `data-supabase.mdc`).
+
 ### `SupabaseColegioRepository` (`data/repository/`)
 Implementación concreta de `ColegioRepository`:
 - Ejecuta en `Dispatchers.IO`.
-- `fetchNearbyColegios`: construye parámetros JSON con `buildJsonObject`, llama a
+- `fetchNearbyColegios`: construye `JsonObject` con `p_lat`, `p_lon` y filtros opcionales
+  (`p_titularidades`, `p_tipos`). **No envía `p_limit`** — la RPC ignora el parámetro del cliente
+  y usa el límite de `app_config`. Llama a
   `supabase.postgrest.rpc("nearby_colegios", params) { schema = BuildConfig.SUPABASE_SCHEMA }`.
   Aplica `.distinctBy { it.id }` antes de mapear DTO → dominio.
 - `searchColegiosByName`: consulta PostgREST directa con `from(schema, "colegios").select { ilike("nombre", ...) }`.
@@ -70,6 +76,22 @@ Implementación concreta de `ColegioRepository`:
 - Errores de `fetchNearbyColegios` se clasifican con `classifyColegiosLoadFailure()` (`data/network/ColegiosLoadError.kt`)
   y se devuelven como `Result.failure(ColegiosLoadException(...))` con categoría (DNS, TIMEOUT, SSL, etc.) y mensaje de usuario.
 - Registrada en Hilt via `RepositoryModule` (`@Binds`).
+
+### `AppConfigRepository` (`data/repository/`, `@Singleton`)
+Lee parámetros remotos de la tabla `app_config` (esquema según flavor: PRE → `staging`, PROD → `public`).
+Registrado por constructor Hilt (`@Inject`), igual que `UserPreferencesRepository` — **no** va en `RepositoryModule` (`@Binds`).
+
+- `getConfigMap(): Map<String, String>` — todas las filas `key` / `value`; en error devuelve mapa vacío.
+- `getUpdateConfig(): AppUpdateConfig` — parsea `min_version_code` y `update_type` desde el mapa;
+  fallback seguro `(minVersionCode = 0, updateType = "FLEXIBLE")` si falla la red o la tabla.
+
+DTOs y claves (`data/model/`):
+- `AppConfigRowDto` — deserialización PostgREST (`key`, `value`).
+- `AppUpdateConfig` — `minVersionCode`, `updateType`.
+- `AppConfigKeys` — constantes: `MIN_VERSION_CODE`, `UPDATE_TYPE`, `NEARBY_COLEGIOS_LIMIT`.
+
+Consumidor principal: `MainActivity.checkForUpdates()` (Play In-App Updates IMMEDIATE/FLEXIBLE si
+`BuildConfig.VERSION_CODE < min_version_code`). Convive con `update/InAppUpdateManager` (banner flexible).
 
 ### `UserPreferencesRepository` (`data/repository/`)
 Persiste preferencias de UI mediante DataStore Preferences:
@@ -146,7 +168,7 @@ data class ColegioConDistancia(
 
 - `initializeMap(userLatLng: LatLng?)`: carga inicial única (flag `initialized`);
   usa ubicación del usuario o Madrid por defecto.
-- `loadNearbyColegios(lat, lon)`: delega en `colegioRepository.fetchNearbyColegios(...)`.
+- `loadNearbyColegios(lat, lon)`: delega en `colegioRepository.fetchNearbyColegios(...)` sin límite en cliente.
   Pasa los filtros activos del estado actual. Actualiza `colegiosCercanos`.
 - `reloadWithCurrentFilters()`: recarga la RPC con el punto de referencia actual
   (usa `puntoReferencia` o `userLocation` o Madrid por defecto).
@@ -192,6 +214,9 @@ data class ColegioConDistancia(
 | `Colegio.kt` | Modelo de dominio + `JornadaTipo` enum |
 | `ColegioRepository.kt` | Interfaz de acceso a datos |
 | `SupabaseColegioRepository.kt` | Implementación Supabase de `ColegioRepository` |
+| `AppConfigRepository.kt` | Parámetros remotos `app_config` (updates, extensible) |
+| `AppConfigRowDto.kt` / `AppUpdateConfig.kt` / `AppConfigKeys.kt` | Modelos de config remota |
+| `MainActivity.kt` | Host Compose + `checkForUpdates()` + `AppConfigRepository` |
 | `UserPreferencesRepository.kt` | Persistencia de preferencias con DataStore |
 | `ColegiosLoadError.kt` | Clasificación de errores de red: `ColegiosLoadCategory`, `ColegiosLoadException` |
 | `NetworkModule.kt` / `RepositoryModule.kt` | Módulos Hilt (en `di/`) |
@@ -210,10 +235,11 @@ Stack habitual: **JUnit 4**, **MockK** (`coEvery` / `coVerify` para suspend), **
 | `es/colefinder/ui/map/CentroFiltrosTest.kt` | Clasificación de tipo, toggles de filtros, helpers RPC, matching de titularidad. |
 | `es/colefinder/data/SupabaseHeaderTest.kt` | Smoke de cabeceras de esquema en RPC vía cliente Ktor mock. |
 | `es/colefinder/data/ColegioRepositoryTest.kt` | `SupabaseColegioRepository` end-to-end con red simulada: RPC `nearby_colegios`, `searchColegiosByName`, éxito/vacío/red/HTTP 500 (`MockEngine`). |
+| `es/colefinder/data/AppConfigRepositoryTest.kt` | `AppConfigRepository`: parseo key/value y defaults en error (`MockEngine`). |
 
 Convenciones útiles en `MapViewModelTest`:
 
-- Stub de `fetchNearbyColegios` con **tercer argumento explícito `200`** (`limit` por defecto del ViewModel/repositorio) para que MockK coincida con la firma real.
+- Stub/verify de `fetchNearbyColegios` con **cuatro argumentos**: `lat`, `lon`, `titularidades`, `tipos` (sin `limit`).
 - `UserPreferencesRepository`: `every { userPreferencesFlow } returns MutableStateFlow(UserPreferences(...))`.
 - Para forzar `Result.failure` en carga cercana sin depender de stubs frágiles, usar una **implementación mínima** de `ColegioRepository` de prueba que devuelva el `Result` deseado.
 - Tras tests que disparan trabajo asíncrono del ViewModel (p. ej. animación de cámara en `onColegioClick`), llamar a **`cancelForTest()`** (cancelación del `viewModelScope`) para evitar efectos colaterales al drenar la cola del test.
