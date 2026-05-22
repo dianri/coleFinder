@@ -18,6 +18,8 @@
 - **Persistencia local**: [DataStore Preferences](https://developer.android.com/topic/libraries/architecture/datastore) (preferencias de UI, p. ej. hints de long press).
 - **Inyección de dependencias**: [Hilt](https://developer.android.com/training/dependency-injection/hilt-android).
 - **Mapas y ubicación**: [Maps Compose](https://github.com/googlemaps/android-maps-compose), Google Play Services Maps y Fused Location Provider.
+- **Actualizaciones in-app**: [Google Play In-App Updates](https://developer.android.com/guide/playcore/in-app-updates) (`app-update-ktx 2.1.0`). Forzado obligatorio (IMMEDIATE) o recomendado (FLEXIBLE) según configuración remota.
+- **Configuración remota**: tabla `app_config` en Supabase (key/value). Controla la versión mínima requerida, el tipo de actualización forzada y el límite de POIs mostrados en el mapa, sin necesidad de publicar una nueva APK.
 
 ## Estructura del código
 
@@ -27,10 +29,11 @@ El módulo es `:app`, namespace `es.colefinder`. Organización real del código 
 |------------------------------------------------|-----------|
 | `ui/map/` | `MapScreen`, `MapViewModel`, `MapState`, filtros (`CentroFiltros`), detalle en pantalla |
 | `data/` | Cliente Supabase (`Supabase.kt`), repositorios (`ColegioRepository`, `SupabaseColegioRepository`, `UserPreferencesRepository`) |
-| `data/model/` | Modelos de dominio (`Colegio`) y DTOs (`NearbyColegioDto`, `ColegioSearchDto`) |
+| `data/model/` | Modelos de dominio (`Colegio`) y DTOs (`NearbyColegioDto`, `ColegioSearchDto`, `AppConfigRowDto`, `AppUpdateConfig`, `AppConfigKeys`) |
+| `data/repository/` | `ColegioRepository`, `SupabaseColegioRepository`, `UserPreferencesRepository`, `AppConfigRepository` |
 | `data/network/` | Clasificación de errores de red (`ColegiosLoadError`, `ColegiosLoadException`) |
 | `di/` | Módulos Hilt (`NetworkModule`, `RepositoryModule`) |
-| `update/` | Sistema de actualizaciones in-app: `InAppUpdateManager` (gestiona una única instancia de `AppUpdateManager`, soporta flujos FLEXIBLE e IMMEDIATE), `InAppUpdateUiState` (estado UI del banner) |
+| `update/` | `InAppUpdateManager` (gestiona una única instancia de `AppUpdateManager`, soporta flujos FLEXIBLE e IMMEDIATE) e `InAppUpdateUiState` (data class con el estado del banner, definida en el mismo archivo) |
 
 No hay un paquete `domain/` separado.
 
@@ -44,6 +47,29 @@ Hay dos sabores en la dimensión `env`:
 | **prod** | `es.colefinder` | `public` | Producción |
 
 Las URLs y claves anon se inyectan por flavor en `BuildConfig` desde secretos (ver siguiente sección).
+
+## Configuración remota (app_config)
+
+La app lee al arrancar la tabla `app_config` del esquema activo
+(staging en PRE, public en PROD). Permite cambiar el comportamiento
+de la app sin publicar una nueva versión.
+
+| Parámetro | Cómo editarlo | Efecto |
+|---|---|---|
+| `min_version_code` | Columna `value` (número) | Versión mínima de la app para funcionar. Si la instalada es menor, se lanza el flujo de actualización. |
+| `update_type` | Columna `value_enum` (selector) | `FLEXIBLE`: actualización recomendada con banner. `IMMEDIATE`: pantalla bloqueante hasta actualizar. |
+| `nearby_colegios_limit` | Columna `value` (número) | Número máximo de colegios que devuelve la RPC. Lo aplica la función SQL directamente; la app no controla este valor. |
+
+> **Nota**: `update_type` se edita vía `value_enum` (enum Postgres con
+> selector en el panel de Supabase). Un trigger sincroniza el valor
+> a la columna `value` automáticamente. No editar `value` directamente
+> para este parámetro.
+
+Para forzar una actualización en producción:
+```sql
+UPDATE public.app_config SET value = '5'              WHERE key = 'min_version_code';
+UPDATE public.app_config SET value_enum = 'IMMEDIATE' WHERE key = 'update_type';
+```
 
 ## Configuración de secretos
 
@@ -130,6 +156,7 @@ Los artefactos de cobertura se guardan 14 días en cada ejecución de CI.
 - **Filtros** por titularidad (Público, Concertado, Privado) y tipo de centro (Primaria, Secundaria, FP, Adultos, Especial, Otros), aplicados en servidor y con fallback en cliente.
 - **Detalle del centro** con navegación a Google Maps y llamada.
 - **Long press** en el mapa para explorar centros en cualquier punto.
+- **Actualizaciones forzadas**: al arrancar, la app consulta `app_config` en Supabase y compara la versión instalada con `min_version_code`. Si es inferior, lanza Google Play In-App Updates en modo IMMEDIATE (bloqueante) o FLEXIBLE (banner) según el valor de `update_type`.
 
 ## Depuración de conectividad
 
