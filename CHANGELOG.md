@@ -8,8 +8,11 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 - Actualización forzada configurable: tablas `app_config` en esquemas `staging` y `public`, `AppConfigRepository` y comprobación en arranque con Play In-App Updates (IMMEDIATE o FLEXIBLE según remoto)
+- Scripts `supabase/setup/` para replicar backend en proyecto Supabase nuevo (esquemas `public`/`staging`, RPC, `app_config`, seed ~500 colegios del centro de Madrid)
 
 ### Changed
+- Texto del hint de long press en el mapa: «Mantén pulsado el mapa para buscar centros cerca»
+- `app_config.value_enum` (enum FLEXIBLE|IMMEDIATE) para editar `update_type` con selector en Supabase; `value` se sincroniza por trigger (interno)
 - Config de actualización: una sola tabla `app_config` por entorno (PRE/PROD); eliminadas tablas redundantes `staging_app_config` (interno)
 - `app_config` vuelve a formato key/value extensible; nuevo parámetro `nearby_colegios_limit` (POI en mapa)
 - RPC `nearby_colegios` lee el límite desde `app_config` e ignora `p_limit` del cliente (apps en pruebas siguen funcionando)

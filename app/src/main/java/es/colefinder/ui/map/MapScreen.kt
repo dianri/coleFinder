@@ -767,7 +767,7 @@ fun MapScreen(
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Mantén pulsado para buscar centros aquí",
+                        text = "Mantén pulsado el mapa para buscar centros cerca",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )
