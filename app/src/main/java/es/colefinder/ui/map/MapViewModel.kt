@@ -257,6 +257,14 @@ class MapViewModel @Inject constructor(
         _state.update { it.copy(showLongPressHint = false) }
     }
 
+    fun showPermissionDeniedHint() {
+        _state.update { it.copy(showPermissionDeniedHint = true) }
+    }
+
+    fun dismissPermissionDeniedHint() {
+        _state.update { it.copy(showPermissionDeniedHint = false) }
+    }
+
     fun onColegioClick(colegioConDistancia: ColegioConDistancia) {
         _state.update { it.copy(selectedColegioConDistancia = colegioConDistancia) }
         viewModelScope.launch {

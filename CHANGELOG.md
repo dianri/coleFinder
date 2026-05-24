@@ -6,12 +6,26 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-05-24
+
+### Added
+- Hint contextual cuando el permiso de ubicación está bloqueado permanentemente:
+  banner con instrucciones para activarlo en Ajustes, se abre directamente al
+  pulsarlo y se descarta solo tras 5 s
+
 ### Fixed
-- Setup staging: política RLS `SELECT` para `authenticated` en `staging.colegios` (alineada con `GRANT`) (interno)
-- Migración `app_config`: RLS para `anon`, creación idempotente del enum y `DROP TRIGGER` antes de recrear triggers (interno)
+- Edge-to-edge Android 15: window insets correctos en SearchBar, FAB y bottom
+  sheet (windowInsetsPadding, statusBarsPadding, navigationBarsPadding, imePadding)
+- Setup staging: política RLS SELECT para authenticated en staging.colegios
+  (alineada con GRANT) (interno)
+- Migración app_config: RLS para anon, creación idempotente del enum y DROP
+  TRIGGER antes de recrear triggers (interno)
 
 ### Changed
-- `AppConfigRepository`: `update_type` remoto solo acepta `FLEXIBLE` o `IMMEDIATE`; resto → fallback `FLEXIBLE` (interno)
+- Dependencias: maps-compose 6.1.2 → 6.6.0, play-services-maps 19.0.0 → 20.0.0
+  (elimina APIs obsoletas setStatusBarColor/setNavigationBarColor en Android 15)
+- AppConfigRepository: update_type remoto solo acepta FLEXIBLE o IMMEDIATE;
+  resto → fallback FLEXIBLE (interno)
 
 ## [1.1.0] - 2026-05-22
 

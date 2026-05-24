@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -82,8 +83,12 @@ import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -373,7 +378,12 @@ fun MapScreen(
         }
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize().onSizeChanged { containerHeight = it.height.toFloat() }) {
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .onSizeChanged { containerHeight = it.height.toFloat() }
+    ) {
         val fullHeight = constraints.maxHeight.toFloat()
         
         // Capa 1: Mapa
@@ -433,6 +443,7 @@ fun MapScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .navigationBarsPadding() // Asegura que el contenido no quede tras la nav bar
+                    .imePadding() // Eleva el sheet si el teclado aparece (p. ej. búsqueda activa)
             ) {
                 // Cabecera: Manejador + Título
                 Column(
@@ -630,6 +641,7 @@ fun MapScreen(
             },
             modifier = Modifier
                 .align(Alignment.TopCenter)
+                .then(if (!searchActive) Modifier.statusBarsPadding() else Modifier)
                 .padding(if (searchActive) 0.dp else 16.dp)
                 .fillMaxWidth()
                 .onSizeChanged { searchBarHeight = it.height.toFloat() }
@@ -703,16 +715,22 @@ fun MapScreen(
         }
         FloatingActionButton(
             onClick = {
-                pendingLocationRequest = true
                 if (locationPermissionsState.allPermissionsGranted) {
                     focusOnCurrentLocationAndLoadNearby()
                     pendingLocationRequest = false
+                } else if (
+                    !locationPermissionsState.shouldShowRationale &&
+                    pendingLocationRequest
+                ) {
+                    viewModel.showPermissionDeniedHint()
                 } else {
+                    pendingLocationRequest = true
                     locationPermissionsState.launchMultiplePermissionRequest()
                 }
             },
             modifier = Modifier
                 .align(Alignment.TopEnd)
+                .statusBarsPadding()
                 .padding(end = 16.dp)
                 .zIndex(1f)
                 .graphicsLayer {
@@ -729,6 +747,13 @@ fun MapScreen(
             if (state.showLongPressHint) {
                 delay(4000)
                 viewModel.onHintDismissed()
+            }
+        }
+
+        LaunchedEffect(state.showPermissionDeniedHint) {
+            if (state.showPermissionDeniedHint) {
+                delay(5000)
+                viewModel.dismissPermissionDeniedHint()
             }
         }
 
@@ -768,6 +793,53 @@ fun MapScreen(
                     )
                     Text(
                         text = "Mantén pulsado el mapa para buscar centros cerca",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = state.showPermissionDeniedHint,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .zIndex(3f)
+                .graphicsLayer {
+                    translationY = fabOffset - with(density) { 64.dp.toPx() }
+                }
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                tonalElevation = 6.dp,
+                shadowElevation = 6.dp,
+                modifier = Modifier
+                    .padding(horizontal = 32.dp)
+                    .clickable {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                        }
+                        context.startActivity(intent)
+                        viewModel.dismissPermissionDeniedHint()
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.LocationOn,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Activa la ubicación en Ajustes > Aplicaciones > ColeFinder > Permisos",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )

@@ -21,6 +21,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -405,6 +406,50 @@ class MapViewModelTest {
                     setOf(TipoCentroFiltro.PRIMARIA)
                 )
             }
+        } finally {
+            viewModel.cancelForTest()
+        }
+    }
+
+    @Test
+    fun showPermissionDeniedHint_activaFlag() = runTest(mainDispatcherRule.dispatcher) {
+        // Given
+        val colegioRepository = mockk<ColegioRepository>()
+        coEvery {
+            colegioRepository.fetchNearbyColegios(any(), any(), any(), any())
+        } returns Result.success(emptyList())
+        val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
+        advanceUntilIdle()
+        try {
+            assertFalse(viewModel.state.value.showPermissionDeniedHint)
+
+            // When
+            viewModel.showPermissionDeniedHint()
+
+            // Then
+            assertTrue(viewModel.state.value.showPermissionDeniedHint)
+        } finally {
+            viewModel.cancelForTest()
+        }
+    }
+
+    @Test
+    fun dismissPermissionDeniedHint_desactivaFlag() = runTest(mainDispatcherRule.dispatcher) {
+        // Given
+        val colegioRepository = mockk<ColegioRepository>()
+        coEvery {
+            colegioRepository.fetchNearbyColegios(any(), any(), any(), any())
+        } returns Result.success(emptyList())
+        val viewModel = MapViewModel(colegioRepository, userPrefsWithFlow())
+        advanceUntilIdle()
+        try {
+            viewModel.showPermissionDeniedHint()
+
+            // When
+            viewModel.dismissPermissionDeniedHint()
+
+            // Then
+            assertFalse(viewModel.state.value.showPermissionDeniedHint)
         } finally {
             viewModel.cancelForTest()
         }
