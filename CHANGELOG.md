@@ -14,6 +14,8 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
   pulsarlo y se descarta solo tras 5 s
 
 ### Fixed
+- Crash al arrastrar el mapa durante una animación de cámara
+  (CancellationException no capturada en maps-compose 6.x)
 - Edge-to-edge Android 15: window insets correctos en SearchBar, FAB y bottom
   sheet (windowInsetsPadding, statusBarsPadding, navigationBarsPadding, imePadding)
 - Setup staging: política RLS SELECT para authenticated en staging.colegios

@@ -121,6 +121,7 @@ import android.content.pm.PackageManager
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import com.google.maps.android.compose.CameraMoveStartedReason
 import com.google.maps.android.compose.GoogleMap
@@ -131,7 +132,6 @@ import com.google.maps.android.compose.MarkerState
 import es.colefinder.data.model.Colegio
 import es.colefinder.data.model.JornadaTipo
 import es.colefinder.ui.utils.createNumberedMarkerBitmap
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -363,7 +363,11 @@ fun MapScreen(
                             CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 250) // Padding generoso
                         )
                         viewModel.setMostrarAvisoCentrosLejanos(true)
-                    } catch (_: Exception) { /* Ignorar si falla el encuadre */ }
+                    } catch (e: CancellationException) {
+                        // El usuario interrumpió la animación moviendo el mapa — ignorar
+                    } catch (e: Exception) {
+                        Log.w("MapScreen", "animate camera cancelled: ${e.message}")
+                    }
                 }
             }
             viewModel.consumeFocusedRequest()
