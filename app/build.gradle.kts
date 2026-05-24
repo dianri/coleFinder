@@ -38,7 +38,7 @@ android {
         //   MAJOR: cambio incompatible o rediseño mayor
         //   MINOR: nueva funcionalidad compatible
         //   PATCH: bugfix o mejora menor
-        versionCode = 7
+        versionCode = 8
         versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -74,7 +74,7 @@ android {
                 "proguard-rules.pro"
             )
             ndk {
-                debugSymbolLevel = "SYMBOL_TABLE"
+                debugSymbolLevel = "FULL"
             }
         }
     }
