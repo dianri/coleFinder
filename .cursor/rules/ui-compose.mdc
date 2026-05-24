@@ -178,6 +178,22 @@ private fun <T> FiltroChipRow(
 - Se oculta automáticamente tras 4 segundos (`LaunchedEffect`).
 - Persiste el descubrimiento en DataStore via `UserPreferencesRepository`.
 
+### PATRÓN: Hint contextual de acción bloqueada (permiso denegado permanentemente)
+- **Componente**: `AnimatedVisibility` con `Surface` (`RoundedCornerShape(24.dp)`, `secondaryContainer`) + `Row` (`Icon` + `Text`), `clickable`.
+- **Trigger**: FAB de ubicación pulsado con permisos bloqueados permanentemente (`!allPermissionsGranted && !shouldShowRationale && pendingLocationRequest` ya `true`).
+- **Comportamiento**:
+  - Al aparecer: `LaunchedEffect` auto-dismiss a los 5000 ms vía `dismissPermissionDeniedHint()`.
+  - Al pulsar: abre `Settings.ACTION_APPLICATION_DETAILS_SETTINGS` con el `package` de la app y llama a `dismissPermissionDeniedHint()`.
+- **Posición**: mismo `translationY` relativo a `fabOffset` que el `longPressHint`, `zIndex(3f)`.
+- **Icono**: `Icons.Default.LocationOn`.
+- **NO** usar `Toast` ni `Snackbar` para este tipo de feedback — siempre hint inline.
+
+### PATRÓN GENERAL: Detección de permiso bloqueado permanentemente
+- Usar: `!locationPermissionsState.allPermissionsGranted &&
+  locationPermissionsState.permissions.any { !it.status.shouldShowRationale } &&
+  pendingLocationRequest` (flag local que indica que ya se solicitó antes).
+- Evaluar `pendingLocationRequest` **antes** de ponerlo a `true` en el mismo clic.
+
 ### Aviso de centros lejanos
 - `state.showRemoteResultsWarning` activa un `Surface` animado (zIndex 4, debajo del buscador).
 - Se auto-descarta tras 6 segundos con `LaunchedEffect`.

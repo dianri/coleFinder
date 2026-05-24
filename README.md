@@ -17,9 +17,14 @@
 - **Cliente remoto**: [supabase-kt](https://github.com/supabase-community/supabase-kt) 3.0.3 (PostgREST) sobre Ktor.
 - **Persistencia local**: [DataStore Preferences](https://developer.android.com/topic/libraries/architecture/datastore) (preferencias de UI, p. ej. hints de long press).
 - **Inyección de dependencias**: [Hilt](https://developer.android.com/training/dependency-injection/hilt-android).
-- **Mapas y ubicación**: [Maps Compose](https://github.com/googlemaps/android-maps-compose), Google Play Services Maps y Fused Location Provider.
+- **Mapas y ubicación**: [Maps Compose](https://github.com/googlemaps/android-maps-compose) **6.6.0**, Play Services Maps **20.0.0** y Fused Location Provider.
 - **Actualizaciones in-app**: [Google Play In-App Updates](https://developer.android.com/guide/playcore/in-app-updates) (`app-update-ktx 2.1.0`). Forzado obligatorio (IMMEDIATE) o recomendado (FLEXIBLE) según configuración remota.
 - **Configuración remota**: tabla `app_config` en Supabase (key/value). Controla la versión mínima requerida, el tipo de actualización forzada y el límite de POIs mostrados en el mapa, sin necesidad de publicar una nueva APK.
+
+## Compatibilidad Android
+
+- **Android 15 (API 35) edge-to-edge**: soportado (`targetSdk` 36; insets en SearchBar, FAB y bottom sheet).
+- **Permiso de ubicación**: si el usuario deniega de forma permanente («No volver a preguntar»), el FAB muestra un hint inline que abre Ajustes de la app (sin depender de un diálogo del sistema que ya no aparece).
 
 ## Estructura del código
 
@@ -156,6 +161,7 @@ Los artefactos de cobertura se guardan 14 días en cada ejecución de CI.
 - **Filtros** por titularidad (Público, Concertado, Privado) y tipo de centro (Primaria, Secundaria, FP, Adultos, Especial, Otros), aplicados en servidor y con fallback en cliente.
 - **Detalle del centro** con navegación a Google Maps y llamada.
 - **Long press** en el mapa para explorar centros en cualquier punto.
+- **Ubicación**: FAB «Mi ubicación»; si el permiso está bloqueado permanentemente, banner con enlace a Ajustes del sistema.
 - **Actualizaciones forzadas**: al arrancar, la app consulta `app_config` en Supabase y compara la versión instalada con `min_version_code`. Si es inferior, lanza Google Play In-App Updates en modo IMMEDIATE (bloqueante) o FLEXIBLE (banner) según el valor de `update_type`.
 
 ## Depuración de conectividad

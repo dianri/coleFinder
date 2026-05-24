@@ -11,7 +11,7 @@ val secretsProps = Properties().apply {
 
 fun getSecret(key: String): String = secretsProps.getProperty(key, "")
 
-val appVersionName = "1.1.0"
+val appVersionName = "1.1.1"
 
 plugins {
     alias(libs.plugins.android.application)
@@ -38,8 +38,8 @@ android {
         //   MAJOR: cambio incompatible o rediseño mayor
         //   MINOR: nueva funcionalidad compatible
         //   PATCH: bugfix o mejora menor
-        versionCode = 5
-        versionName = "1.1.0"
+        versionCode = 8
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -73,6 +73,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
     }
     compileOptions {

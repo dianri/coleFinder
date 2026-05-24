@@ -36,6 +36,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge-to-edge: sin setStatusBarColor/setNavigationBarColor en código propio.
+        // Play Console puede reportar Window.setStatusBarColor, setNavigationBarColor y
+        // LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES en clases ofuscadas de dependencias
+        // (p. ej. Maps SDK < 20). No hay usos en src/; maps-compose 6.6.0 + play-services-maps 20.0.0.
         enableEdgeToEdge()
         inAppUpdateManager = InAppUpdateManager(this) { inAppUpdateState.value = it }
 

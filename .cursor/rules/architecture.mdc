@@ -120,6 +120,7 @@ data class MapState(
     val favoritosIds: Set<Int> = emptySet(),                         // Favoritos in-memory (Room es roadmap)
     val cameraPosition: CameraPositionState = ...,
     val showLongPressHint: Boolean = false,
+    val showPermissionDeniedHint: Boolean = false,                     // FAB ubicación con permiso bloqueado (2 denegaciones / "No preguntar"); dismiss 5s o tap banner
     val hasDiscoveredLongPress: Boolean = false,                      // Sincronizado desde DataStore
     val longPressHintCount: Int = 0,                                  // Sincronizado desde DataStore
     val focusedRequestType: FocusedRequestType = FocusedRequestType.NONE,
@@ -133,6 +134,11 @@ data class MapState(
         get() = colegiosCercanos.filter { ... }
 }
 ```
+
+- `showPermissionDeniedHint: Boolean = false`
+  → Se activa cuando el usuario pulsa el FAB de ubicación y el permiso está
+    bloqueado permanentemente (denegado 2 veces o "No preguntar de nuevo").
+    Se desactiva tras 5 s (auto-dismiss) o al pulsar el banner.
 
 ### `SearchSuggestion` (en `MapState.kt`)
 ```kotlin
@@ -185,6 +191,8 @@ data class ColegioConDistancia(
 - `onMapClick()`: limpia selección; muestra hint si el usuario aún no ha descubierto el long press.
 - `onMapMoved()`: muestra hint si el usuario aún no ha descubierto el long press.
 - `onHintDismissed()`: limpia `showLongPressHint`.
+- `showPermissionDeniedHint()`: activa `showPermissionDeniedHint` en `MapState`.
+- `dismissPermissionDeniedHint()`: desactiva `showPermissionDeniedHint` en `MapState`.
 - `onColegioClick(ColegioConDistancia)`: actualiza `selectedColegioConDistancia` y anima cámara.
 - `moverAColegio(latLng, ColegioConDistancia)`: solo cámara + selección, nunca recarga datos.
 - `clearSelectedColegio()`: limpia `selectedColegioConDistancia`.
