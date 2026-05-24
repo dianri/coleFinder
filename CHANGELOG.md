@@ -16,6 +16,10 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 ### Fixed
 - Crash al arrastrar el mapa durante una animación de cámara
   (CancellationException no capturada en maps-compose 6.x)
+- Auto-fit de cámara cuando el usuario está fuera de España: espera a que
+  la animación inicial termine (polling isMoving, máx. 3 s) antes de
+  evaluar los bounds visibles; consumeFocusedRequest() solo se llama cuando
+  la proyección del mapa está disponible, evitando el bucle de reactivación
 - Edge-to-edge Android 15: window insets correctos en SearchBar, FAB y bottom
   sheet (windowInsetsPadding, statusBarsPadding, navigationBarsPadding, imePadding)
 - Setup staging: política RLS SELECT para authenticated en staging.colegios
