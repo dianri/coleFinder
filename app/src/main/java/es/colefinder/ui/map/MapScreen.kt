@@ -333,9 +333,14 @@ fun MapScreen(
     // Efecto para auto-ajustar cámara si los resultados son lejanos (Filtro 'Mi Ubicación' o Búsquedas)
     LaunchedEffect(state.isLoading, state.focusedRequestType) {
         if (!state.isLoading && state.focusedRequestType != FocusedRequestType.NONE && state.colegiosConDistancia.isNotEmpty()) {
-            // Un pequeño delay ayuda a asegurar que los marcadores y la proyección ya están listos
-            delay(500)
-            
+            // Esperar a que la cámara esté quieta (máx 3s para no bloquear indefinidamente)
+            val deadline = System.currentTimeMillis() + 3000L
+            while (state.cameraPosition.isMoving && System.currentTimeMillis() < deadline) {
+                delay(100)
+            }
+            // Un pequeño margen extra para que la proyección se estabilice
+            delay(150)
+
             val visibleBounds = state.cameraPosition.projection?.visibleRegion?.latLngBounds
             if (visibleBounds != null) {
                 // Verificar si hay algún centro dentro del área visible actual (zoom 15)
@@ -369,8 +374,8 @@ fun MapScreen(
                         Log.w("MapScreen", "animate camera cancelled: ${e.message}")
                     }
                 }
+                viewModel.consumeFocusedRequest()
             }
-            viewModel.consumeFocusedRequest()
         }
     }
 
