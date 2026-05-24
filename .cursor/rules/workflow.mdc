@@ -304,3 +304,83 @@ del nombre del fichero ya identifica el flavor. Al subir `versionName`,
 los APKs reflejan la versión automáticamente sin ningún cambio adicional.
 
 ### Ejemplo de entrada correcta en CHANGELOG
+
+---
+
+## Actualización de CHANGELOG y README
+
+Al cerrar una rama `feature/*` (p. ej. antes de PR a `develop`) o cuando el usuario
+pida documentar cambios de una feature, actualizar **en el mismo commit** (o en el
+commit de documentación acordado):
+
+### CHANGELOG.md
+
+1. Editar solo el bloque `## [Unreleased]` (no tocar versiones ya publicadas).
+2. Mantener **una sola** cabecera por tipo (`### Added`, `### Fixed`, `### Changed`, …).
+3. Orden de secciones en `[Unreleased]`: coherente con el fichero (p. ej. `Fixed` antes de `Added` si ya se usa así).
+4. Clasificar cada bullet según la tabla de «Cuándo actualizar el CHANGELOG.md».
+5. Marcar mejoras solo de backend/SQL/refactor sin impacto visible con **(interno)**.
+6. Incluir bumps de dependencias relevantes en `### Changed` (versión antigua → nueva y motivo breve).
+
+### README.md
+
+1. Revisar si el cambio es visible para desarrolladores o usuarios (stack, compatibilidad, funcionalidades).
+2. **Compatibilidad / requisitos**: mantener al día Android edge-to-edge, permisos y `targetSdk` si cambian.
+3. **Dependencias**: si el README cita versiones concretas (p. ej. maps-compose, play-services-maps),
+   deben coincidir con `gradle/libs.versions.toml` — no dejar versiones obsoletas.
+4. **No duplicar**: si un punto ya está documentado con el mismo significado, no añadir un párrafo paralelo;
+   solo corregir versiones o redacción desactualizada.
+5. Funcionalidades nuevas: un bullet en «Funcionalidades principales» solo si aporta información que no esté ya en compatibilidad/stack.
+
+### Reglas Cursor (`.cursor/rules/`)
+
+- Si el cambio altera contratos, UI patterns o arquitectura documentada, actualizar el `.mdc` correspondiente
+  (`architecture.mdc`, `ui-compose.mdc`, `data-supabase.mdc`) en la misma tarea de documentación.
+- No modificar lógica de código ni tests solo por esta tarea de documentación.
+
+### Checklist rápido antes de merge de feature
+
+- [ ] `CHANGELOG.md` → `[Unreleased]` refleja Added / Fixed / Changed de la rama
+- [ ] `README.md` → compatibilidad, versiones de libs y funcionalidades al día, sin duplicados
+- [ ] Reglas `.mdc` → actualizadas si cambió comportamiento arquitectónico o de UI
+
+---
+
+## CHANGELOG y README — actualización obligatoria
+
+### Cuándo actualizar
+Actualizar CHANGELOG.md y README.md como parte de la misma tarea y commit
+en la que se realiza el cambio, siempre que incluya al menos uno de:
+- Nuevo comportamiento visible para el usuario (pantalla, mensaje, flujo)
+- Corrección de bug con impacto visible o de seguridad
+- Cambio de dependencia externa (nombre + versión anterior → nueva)
+- Cambio de API pública del ViewModel, repositorio o contrato de datos
+- Cambio en requisitos mínimos (minSdk, targetSdk, permisos)
+
+NO es necesario actualizar para:
+- Refactors internos sin cambio de comportamiento (marcar como "interno")
+- Cambios de tests únicamente
+- Ajustes de formato o comentarios
+
+### Flujo por tarea
+Al finalizar cada tarea, antes de hacer el commit:
+1. ¿El cambio entra en alguna categoría de "Cuándo actualizar"? → Sí: continuar
+2. Añadir entrada en [Unreleased] del CHANGELOG.md
+3. Si hay versiones de dependencias o requisitos en el README.md afectados,
+   actualizarlos
+4. Incluir CHANGELOG.md (y README.md si aplica) en el mismo commit que el
+   cambio, no en un commit separado
+
+### Formato CHANGELOG
+Seguir https://keepachangelog.com/es/1.0.0/ estrictamente:
+- Siempre añadir en [Unreleased], nunca directamente en una versión con fecha
+- Categorías en orden: Added → Changed → Deprecated → Removed → Fixed → Security
+- Una línea por cambio; si es solo interno añadir "(interno)" al final
+- Al hacer release: renombrar [Unreleased] a [X.Y.Z] - YYYY-MM-DD y crear
+  nuevo [Unreleased] vacío
+
+### Formato README
+- Si cambia una versión de dependencia que aparece en el README, actualizarla
+- Si se añade un permiso nuevo o requisito de sistema, documentarlo
+- Si se añade una feature visible, añadirla en la sección de funcionalidades
+- No duplicar información que ya está en el CHANGELOG

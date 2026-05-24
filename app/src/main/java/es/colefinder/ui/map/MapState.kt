@@ -26,6 +26,7 @@ data class MapState(
         position = CameraPosition.fromLatLngZoom(LatLng(40.4168, -3.7038), 6f)
     ),
     val showLongPressHint: Boolean = false,
+    val showPermissionDeniedHint: Boolean = false,
     val hasDiscoveredLongPress: Boolean = false,
     val longPressHintCount: Int = 0,
     val focusedRequestType: FocusedRequestType = FocusedRequestType.NONE,

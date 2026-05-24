@@ -12,6 +12,7 @@ import es.colefinder.data.model.Colegio
 import es.colefinder.data.network.ColegiosLoadException
 import es.colefinder.data.repository.ColegioRepository
 import es.colefinder.data.repository.UserPreferencesRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -68,9 +69,15 @@ class MapViewModel @Inject constructor(
             Log.d(TAG, "initializeMap: ubicación disponible (${userLatLng.latitude}, ${userLatLng.longitude})")
             viewModelScope.launch {
                 _state.update { it.copy(userLocation = userLatLng, focusedRequestType = FocusedRequestType.MY_LOCATION) }
-                _state.value.cameraPosition.animate(
-                    CameraUpdateFactory.newLatLngZoom(userLatLng, 15f)
-                )
+                try {
+                    _state.value.cameraPosition.animate(
+                        CameraUpdateFactory.newLatLngZoom(userLatLng, 15f)
+                    )
+                } catch (e: CancellationException) {
+                    // El usuario interrumpió la animación moviendo el mapa — ignorar
+                } catch (e: Exception) {
+                    Log.w(TAG, "animate camera cancelled: ${e.message}")
+                }
                 loadNearbyColegios(userLatLng.latitude, userLatLng.longitude)
             }
         } else {
@@ -188,9 +195,15 @@ class MapViewModel @Inject constructor(
                     focusedRequestType = FocusedRequestType.SEARCH
                 )
             }
-            _state.value.cameraPosition.animate(
-                CameraUpdateFactory.newLatLngZoom(suggestion.latLng, 15f)
-            )
+            try {
+                _state.value.cameraPosition.animate(
+                    CameraUpdateFactory.newLatLngZoom(suggestion.latLng, 15f)
+                )
+            } catch (e: CancellationException) {
+                // El usuario interrumpió la animación moviendo el mapa — ignorar
+            } catch (e: Exception) {
+                Log.w(TAG, "animate camera cancelled: ${e.message}")
+            }
             if (suggestion.colegioId != null) {
                 pendingColegioSelection = suggestion.colegioId
             }
@@ -201,9 +214,15 @@ class MapViewModel @Inject constructor(
     fun updateUserLocation(latLng: LatLng) {
         viewModelScope.launch {
             _state.update { it.copy(userLocation = latLng, puntoReferencia = null, focusedRequestType = FocusedRequestType.MY_LOCATION) }
-            _state.value.cameraPosition.animate(
-                CameraUpdateFactory.newLatLngZoom(latLng, 15f)
-            )
+            try {
+                _state.value.cameraPosition.animate(
+                    CameraUpdateFactory.newLatLngZoom(latLng, 15f)
+                )
+            } catch (e: CancellationException) {
+                // El usuario interrumpió la animación moviendo el mapa — ignorar
+            } catch (e: Exception) {
+                Log.w(TAG, "animate camera cancelled: ${e.message}")
+            }
             loadNearbyColegios(latLng.latitude, latLng.longitude)
         }
     }
@@ -257,14 +276,28 @@ class MapViewModel @Inject constructor(
         _state.update { it.copy(showLongPressHint = false) }
     }
 
+    fun showPermissionDeniedHint() {
+        _state.update { it.copy(showPermissionDeniedHint = true) }
+    }
+
+    fun dismissPermissionDeniedHint() {
+        _state.update { it.copy(showPermissionDeniedHint = false) }
+    }
+
     fun onColegioClick(colegioConDistancia: ColegioConDistancia) {
         _state.update { it.copy(selectedColegioConDistancia = colegioConDistancia) }
         viewModelScope.launch {
-            _state.value.cameraPosition.animate(
-                CameraUpdateFactory.newLatLngZoom(
-                    LatLng(colegioConDistancia.colegio.latitud, colegioConDistancia.colegio.longitud), 17f
+            try {
+                _state.value.cameraPosition.animate(
+                    CameraUpdateFactory.newLatLngZoom(
+                        LatLng(colegioConDistancia.colegio.latitud, colegioConDistancia.colegio.longitud), 17f
+                    )
                 )
-            )
+            } catch (e: CancellationException) {
+                // El usuario interrumpió la animación moviendo el mapa — ignorar
+            } catch (e: Exception) {
+                Log.w(TAG, "animate camera cancelled: ${e.message}")
+            }
         }
     }
 
@@ -325,9 +358,15 @@ class MapViewModel @Inject constructor(
                             focusedRequestType = FocusedRequestType.SEARCH
                         )
                     }
-                    _state.value.cameraPosition.animate(
-                        CameraUpdateFactory.newLatLngZoom(latLng, 15f)
-                    )
+                    try {
+                        _state.value.cameraPosition.animate(
+                            CameraUpdateFactory.newLatLngZoom(latLng, 15f)
+                        )
+                    } catch (e: CancellationException) {
+                        // El usuario interrumpió la animación moviendo el mapa — ignorar
+                    } catch (e: Exception) {
+                        Log.w(TAG, "animate camera cancelled: ${e.message}")
+                    }
                     loadNearbyColegios(latLng.latitude, latLng.longitude)
                 } else {
                     _state.update { it.copy(error = "Dirección no encontrada", isLoading = false) }
@@ -341,9 +380,15 @@ class MapViewModel @Inject constructor(
     fun moverAColegio(latLng: LatLng, colegioConDistancia: ColegioConDistancia) {
         _state.update { it.copy(selectedColegioConDistancia = colegioConDistancia) }
         viewModelScope.launch {
-            _state.value.cameraPosition.animate(
-                CameraUpdateFactory.newLatLngZoom(latLng, 17f)
-            )
+            try {
+                _state.value.cameraPosition.animate(
+                    CameraUpdateFactory.newLatLngZoom(latLng, 17f)
+                )
+            } catch (e: CancellationException) {
+                // El usuario interrumpió la animación moviendo el mapa — ignorar
+            } catch (e: Exception) {
+                Log.w(TAG, "animate camera cancelled: ${e.message}")
+            }
         }
     }
 }
