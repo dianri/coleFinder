@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateInfo
 import com.google.android.play.core.appupdate.AppUpdateOptions
 import com.google.android.play.core.install.InstallStateUpdatedListener
 import com.google.android.play.core.install.model.AppUpdateType
@@ -25,6 +26,10 @@ data class InAppUpdateUiState(
     val hayActualizacionDisponible: Boolean = false,
     /** Descarga flexible terminada; hay que llamar a [InAppUpdateManager.completeFlexibleUpdate]. */
     val descargaCompletadaPendienteReinicio: Boolean = false,
+    /** El usuario cerró el aviso de actualización disponible en esta sesión. */
+    val actualizacionDisponibleDescartada: Boolean = false,
+    /** El usuario pospuso el reinicio tras descargar la actualización flexible. */
+    val reinicioBannerDescartado: Boolean = false,
 )
 
 class InAppUpdateManager(
@@ -46,6 +51,7 @@ class InAppUpdateManager(
                 uiState = uiState.copy(
                     descargaCompletadaPendienteReinicio = true,
                     hayActualizacionDisponible = false,
+                    reinicioBannerDescartado = false,
                 )
             InstallStatus.FAILED, InstallStatus.CANCELED ->
                 Log.d(TAG, "install status=${state.installStatus()}")
@@ -74,20 +80,25 @@ class InAppUpdateManager(
 
     /**
      * Llamar desde [Activity.onResume] (cada vez que el usuario vuelve a la app o entra en primer plano):
-     * detecta actualización flexible disponible o descarga ya completada.
+     * relanza IMMEDIATE si quedó a medias, detecta descarga flexible completada o update disponible.
      */
-    fun checkForFlexibleUpdate() {
+    fun checkForUpdateOnResume() {
         appUpdateManager.appUpdateInfo
             .addOnSuccessListener { info ->
                 when {
+                    info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS ->
+                        resumeImmediateUpdateFlow(info)
+
                     info.installStatus() == InstallStatus.DOWNLOADED ->
                         uiState = uiState.copy(
                             descargaCompletadaPendienteReinicio = true,
                             hayActualizacionDisponible = false,
+                            reinicioBannerDescartado = false,
                         )
 
                     info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
-                        info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE) ->
+                        info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE) &&
+                        !uiState.actualizacionDisponibleDescartada ->
                         uiState = uiState.copy(hayActualizacionDisponible = true)
 
                     else ->
@@ -99,6 +110,19 @@ class InAppUpdateManager(
             .addOnFailureListener { e ->
                 Log.w(TAG, "No se pudo obtener AppUpdateInfo (normal fuera de Play o sin red)", e)
             }
+    }
+
+    private fun resumeImmediateUpdateFlow(info: AppUpdateInfo) {
+        if (!info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)) return
+        try {
+            appUpdateManager.startUpdateFlowForResult(
+                info,
+                updateFlowLauncher,
+                AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build(),
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Reanudar flujo IMMEDIATE en onResume", e)
+        }
     }
 
     /**
@@ -158,6 +182,20 @@ class InAppUpdateManager(
      */
     fun completeFlexibleUpdate() {
         appUpdateManager.completeUpdate()
+    }
+
+    fun dismissAvailableUpdateBanner() {
+        uiState = uiState.copy(
+            hayActualizacionDisponible = false,
+            actualizacionDisponibleDescartada = true,
+        )
+    }
+
+    fun dismissRestartBanner() {
+        uiState = uiState.copy(
+            descargaCompletadaPendienteReinicio = false,
+            reinicioBannerDescartado = true,
+        )
     }
 
     private object AppUpdateOptionsHolder {
