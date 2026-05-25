@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+  <!-- ALWAYS (no shortEdges): requerido en Android 15 con targetSdk 35+ -->
+  <style name="Theme.ColeFinder" parent="android:Theme.Material.Light.NoActionBar">
+    <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+  </style>
+</resources>

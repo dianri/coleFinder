@@ -81,13 +81,12 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -141,7 +140,8 @@ enum class MapSheetValue { Collapsed, Intermediate, Expanded }
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun MapScreen(
-    viewModel: MapViewModel = hiltViewModel()
+    viewModel: MapViewModel = hiltViewModel(),
+    contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
@@ -279,7 +279,7 @@ fun MapScreen(
     SideEffect {
         if (containerHeight > 0 && headerHeight > 0) {
             // hCollapsed: el tope del sheet queda a (altura total - el cabezal visible por encima de la nav bar)
-            // Ya que aplicamos navigationBarsPadding() abajo, el headerHeight medido NO incluye la barra de navegación.
+            // El padding inferior del sheet usa WindowInsets.navigationBars.asPaddingValues().
             val hCollapsed = containerHeight - headerHeight - navBarPx
             val hIntermediate = containerHeight - (headerHeight + filtersHeight) - navBarPx
             val hExpanded = searchBarHeight + with(density) { 24.dp.toPx() } // Debajo de la SearchBar + margen 24dp
@@ -390,7 +390,6 @@ fun MapScreen(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.statusBars)
             .onSizeChanged { containerHeight = it.height.toFloat() }
     ) {
         val fullHeight = constraints.maxHeight.toFloat()
@@ -451,8 +450,8 @@ fun MapScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .navigationBarsPadding() // Asegura que el contenido no quede tras la nav bar
-                    .imePadding() // Eleva el sheet si el teclado aparece (p. ej. búsqueda activa)
+                    .padding(WindowInsets.navigationBars.asPaddingValues())
+                    .imePadding()
             ) {
                 // Cabecera: Manejador + Título
                 Column(
@@ -650,7 +649,13 @@ fun MapScreen(
             },
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .then(if (!searchActive) Modifier.statusBarsPadding() else Modifier)
+                .then(
+                    if (searchActive) {
+                        Modifier.windowInsetsPadding(WindowInsets.statusBars)
+                    } else {
+                        Modifier.padding(top = contentPadding.calculateTopPadding())
+                    }
+                )
                 .padding(if (searchActive) 0.dp else 16.dp)
                 .fillMaxWidth()
                 .onSizeChanged { searchBarHeight = it.height.toFloat() }
@@ -685,8 +690,10 @@ fun MapScreen(
             exit = slideOutVertically { it } + fadeOut(),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(16.dp)
-                .padding(bottom = 80.dp) // No obstruir el estado colapsado
+                .padding(horizontal = 16.dp)
+                .padding(
+                    bottom = 80.dp + contentPadding.calculateBottomPadding(),
+                )
                 .zIndex(2f)
         ) {
             state.selectedColegioConDistancia?.let { colegioConDistancia ->
@@ -739,8 +746,10 @@ fun MapScreen(
             },
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(end = 16.dp)
+                .padding(
+                    top = contentPadding.calculateTopPadding(),
+                    end = 16.dp,
+                )
                 .zIndex(1f)
                 .graphicsLayer {
                     translationY = fabOffset - with(density) { 80.dp.toPx() }
@@ -864,7 +873,7 @@ fun MapScreen(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .zIndex(4f)
-                .padding(top = 100.dp) // Debajo del buscador
+                .padding(top = contentPadding.calculateTopPadding() + 100.dp)
         ) {
             Surface(
                 shape = RoundedCornerShape(24.dp),

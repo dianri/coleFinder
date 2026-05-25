@@ -6,6 +6,20 @@ Versionado: [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-05-25
+
+### Added
+- Banner de actualización in-app: botón cerrar para posponer aviso de descarga
+  o reinicio pendiente hasta la siguiente apertura de la app
+
+### Changed
+- Edge-to-edge Android 15: sustituir `enableEdgeToEdge()` (invoca APIs
+  deprecadas en androidx.activity) por `WindowCompat.setDecorFitsSystemWindows`
+  + cutout `ALWAYS`; `Scaffold` raíz con `contentWindowInsets =
+  WindowInsets.systemBars`, mapa a pantalla completa e insets en overlays y sheet
+- Actualizaciones in-app: reanuda flujo IMMEDIATE interrumpido al volver a
+  primer plano (`onResume`)
+
 ## [1.1.1] - 2026-05-24
 
 ### Added

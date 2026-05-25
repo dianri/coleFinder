@@ -239,11 +239,69 @@ Hilt generados, Composables, ui/theme, R, BuildConfig y serializers.
 
 ## Reglas de CHANGELOG y versionado
 
+### Flujo de ramas y principio `[Unreleased]`
+
+Flujo del repositorio: **`feature/*` → `develop` → `main`**.
+
+- Usar `## [Unreleased]` **mientras no se ha decidido** en qué versión (`X.Y.Z`) saldrá el cambio.
+  Aplica en `feature/*`, en `develop`, en PR hacia `main` o en cualquier commit intermedio.
+- **Nunca** duplicar cabeceras de sección (`### Added`, `### Changed`, `### Fixed`,
+  `### Removed`, …) dentro del mismo bloque de versión (sea `[Unreleased]` o `[X.Y.Z]`).
+- **Nunca** crear `## [X.Y.Z] - YYYY-MM-DD` por iniciativa del agente (p. ej. al mergear
+  a `develop`/`main` sin que el usuario lo pida).
+
+#### Ejemplos
+
+✅ **CORRECTO** — cambios en `[Unreleased]` en una `feature/*` antes de decidir versión:
+
+```markdown
+## [Unreleased]
+
+### Fixed
+- Evitar solapamiento de banners Supabase y Play In-App Updates
+```
+
+✅ **CORRECTO** — bump en `feature/fix-update` porque el usuario pidió «sube la versión a 1.1.3»:
+
+```markdown
+## [Unreleased]
+
+## [1.1.3] - 2026-05-26
+
+### Fixed
+- Evitar solapamiento de banners Supabase y Play In-App Updates
+```
+
+(Y el mismo bump es válido en `develop` o en la PR a `main` si el usuario lo pide ahí.)
+
+❌ **INCORRECTO** — crear `## [1.1.2]` sin señal explícita del usuario (aunque la PR vaya a `main`):
+
+```markdown
+## [Unreleased]
+
+## [1.1.2] - 2026-05-25   ← NO: sin «sube la versión», «bump versionCode», etc.
+
+### Fixed
+- ...
+```
+
+❌ **INCORRECTO** — duplicar `### Fixed` bajo el mismo bloque:
+
+```markdown
+## [Unreleased]
+
+### Fixed
+- Bug A
+
+### Fixed   ← NO: añadir bullet bajo la sección existente
+- Bug B
+```
+
 ### Cuándo actualizar el CHANGELOG.md
 
-El fichero CHANGELOG.md en la raíz del proyecto DEBE actualizarse
-como parte del mismo commit que introduce el cambio. No dejar el
-changelog para después.
+El fichero `CHANGELOG.md` en la raíz del proyecto DEBE actualizarse como parte del
+**mismo commit** que introduce el cambio (en `[Unreleased]`). No dejar el changelog
+para después.
 
 | Tipo de cambio | Sección en CHANGELOG |
 |:---|:---|
@@ -253,14 +311,19 @@ changelog para después.
 | Corrección de un bug | `### Fixed` bajo `[Unreleased]` |
 | Mejora técnica interna sin cambio de comportamiento | `### Changed` bajo `[Unreleased]` con nota "(interno)" |
 
-### Estructura bajo `[Unreleased]` (sin cabeceras duplicadas)
+### Estructura bajo cada bloque de versión (sin cabeceras duplicadas)
 
-- Dentro de un mismo bloque `## [Unreleased]` debe haber **como máximo una** cabecera de cada tipo: `### Added`, `### Changed`, `### Deprecated`, `### Removed`, `### Fixed`, `### Security` (las que realmente se usen en el proyecto).
+- Dentro de un mismo bloque (`## [Unreleased]` o `## [X.Y.Z]`) debe haber **como máximo una**
+  cabecera de cada tipo: `### Added`, `### Changed`, `### Deprecated`, `### Removed`,
+  `### Fixed`, `### Security` (las que realmente se usen en el proyecto).
 - Al añadir una entrada nueva:
-  - **No** crear una cabecera `### Added` (u otra) nueva si ya existe una bajo el mismo `## [Unreleased]`.
+  - **No** crear una cabecera `### Added` (u otra) nueva si ya existe una bajo el mismo bloque.
   - Añadir siempre un **nuevo bullet** dentro de la sección existente que corresponda según la tabla de tipos más arriba.
-- Keep a Changelog define un orden canónico entre *tipos* de sección (`Added`, `Changed`, …, `Fixed`, `Security`). En el `## [Unreleased]` de este repo puede usarse `### Fixed` antes de `### Added` si así se mantiene la consistencia del fichero; **no reordenar** bloques ya publicados ni mezclar entradas entre versiones. Lo imprescindible es **no duplicar** cabeceras del mismo tipo bajo el mismo `## [Unreleased]`.
-- Antes de dar por cerrado un cambio que toque `CHANGELOG.md`, **comprobar** que bajo `## [Unreleased]` no hay dos veces `### Added`, dos `### Fixed`, etc., y que cada bullet está en la sección correcta según la tabla.
+- Keep a Changelog define un orden canónico entre *tipos* de sección. En el `## [Unreleased]` de
+  este repo puede usarse `### Fixed` antes de `### Added` si así se mantiene la consistencia del
+  fichero; **no reordenar** bloques ya publicados ni mezclar entradas entre versiones.
+- Antes de dar por cerrado un cambio que toque `CHANGELOG.md`, **comprobar** que no hay cabeceras
+  duplicadas del mismo tipo bajo el mismo bloque de versión.
 
 ### Qué NO incluir en el CHANGELOG
 
@@ -269,18 +332,32 @@ changelog para después.
 - Refactors de nombre de variable sin impacto funcional.
 - Actualizaciones de dependencias menores sin impacto visible.
 
-### Cuándo hacer una release (mover Unreleased a versión)
+### Cuándo crear una versión en el CHANGELOG (señal explícita del usuario)
 
-Una release ocurre cuando se va a distribuir la app (merge a main
-con intención de publicar). En ese momento:
+La cabecera `## [X.Y.Z] - YYYY-MM-DD` se crea **cuando el usuario decide la versión** y
+lo pide explícitamente. **No hay un momento fijo obligatorio** en el flujo
+`feature/*` → `develop` → `main`: el bump puede ocurrir en **cualquier rama** en la que
+estéis trabajando cuando llegue esa señal.
 
-1. Cambiar `## [Unreleased]` por `## [X.Y.Z] - YYYY-MM-DD` con la
-   fecha real del día.
-2. Añadir un nuevo bloque `## [Unreleased]` vacío encima.
-3. Incrementar versionCode en +1 en app/build.gradle.kts.
-4. Actualizar versionName a "X.Y.Z" en app/build.gradle.kts
-   (y la val appVersionName si se usa esa variante).
-5. Hacer commit con mensaje: `chore: release vX.Y.Z`.
+Frases que cuentan como señal:
+
+- «sube la versión a X.X.X»
+- «bump versionCode» / «bump versionCode a N»
+- «vamos a publicar la versión X.X.X» / «vamos a publicar X.X.X»
+- «realiza el release vX.X.X» / «chore: release vX.X.X»
+
+**En cuanto el usuario decide la versión**, el agente debe (en el mismo commit de release):
+
+1. Renombrar `## [Unreleased]` → `## [X.Y.Z] - YYYY-MM-DD` con la **fecha actual**.
+2. Crear un nuevo `## [Unreleased]` vacío **encima**.
+3. Actualizar `versionCode` y `versionName` (y `appVersionName` si aplica) en
+   `app/build.gradle.kts` con los valores indicados por el usuario.
+4. Hacer commit con mensaje: `chore: release vX.Y.Z` (salvo que el usuario pida otro).
+
+**No** ejecutar los pasos 1–3 sin señal explícita (ni al cerrar una feature, ni al mergear
+a `develop`, ni al abrir la PR a `main`, ni al publicar en Play por cuenta propia del agente).
+
+Tras el bump, los **nuevos** cambios vuelven a documentarse solo bajo el `[Unreleased]` vacío.
 
 ### Política de versionado semántico
 
@@ -303,8 +380,6 @@ El flavor PRE no lleva suffix en `versionName` de Gradle — el prefijo
 del nombre del fichero ya identifica el flavor. Al subir `versionName`,
 los APKs reflejan la versión automáticamente sin ningún cambio adicional.
 
-### Ejemplo de entrada correcta en CHANGELOG
-
 ---
 
 ## Actualización de CHANGELOG y README
@@ -315,7 +390,7 @@ commit de documentación acordado):
 
 ### CHANGELOG.md
 
-1. Editar solo el bloque `## [Unreleased]` (no tocar versiones ya publicadas).
+1. Editar **solo** el bloque `## [Unreleased]` (no crear `## [X.Y.Z]` salvo bump explícito).
 2. Mantener **una sola** cabecera por tipo (`### Added`, `### Fixed`, `### Changed`, …).
 3. Orden de secciones en `[Unreleased]`: coherente con el fichero (p. ej. `Fixed` antes de `Added` si ya se usa así).
 4. Clasificar cada bullet según la tabla de «Cuándo actualizar el CHANGELOG.md».
@@ -340,7 +415,7 @@ commit de documentación acordado):
 
 ### Checklist rápido antes de merge de feature
 
-- [ ] `CHANGELOG.md` → `[Unreleased]` refleja Added / Fixed / Changed de la rama
+- [ ] `CHANGELOG.md` → `[Unreleased]` refleja Added / Fixed / Changed de la rama (sin bump a `[X.Y.Z]` salvo que el usuario lo haya pedido en esta rama)
 - [ ] `README.md` → compatibilidad, versiones de libs y funcionalidades al día, sin duplicados
 - [ ] Reglas `.mdc` → actualizadas si cambió comportamiento arquitectónico o de UI
 
@@ -365,7 +440,7 @@ NO es necesario actualizar para:
 ### Flujo por tarea
 Al finalizar cada tarea, antes de hacer el commit:
 1. ¿El cambio entra en alguna categoría de "Cuándo actualizar"? → Sí: continuar
-2. Añadir entrada en [Unreleased] del CHANGELOG.md
+2. Añadir entrada en `[Unreleased]` del `CHANGELOG.md` (**nunca** en `## [X.Y.Z]` salvo bump explícito)
 3. Si hay versiones de dependencias o requisitos en el README.md afectados,
    actualizarlos
 4. Incluir CHANGELOG.md (y README.md si aplica) en el mismo commit que el
@@ -373,11 +448,10 @@ Al finalizar cada tarea, antes de hacer el commit:
 
 ### Formato CHANGELOG
 Seguir https://keepachangelog.com/es/1.0.0/ estrictamente:
-- Siempre añadir en [Unreleased], nunca directamente en una versión con fecha
+- **Desarrollo:** añadir en `[Unreleased]` hasta que el usuario pida bump; entonces renombrar a `[X.Y.Z] - YYYY-MM-DD` (en la rama actual: `feature/*`, `develop` o PR a `main`)
 - Categorías en orden: Added → Changed → Deprecated → Removed → Fixed → Security
 - Una línea por cambio; si es solo interno añadir "(interno)" al final
-- Al hacer release: renombrar [Unreleased] a [X.Y.Z] - YYYY-MM-DD y crear
-  nuevo [Unreleased] vacío
+- No duplicar cabeceras `### …` dentro del mismo bloque de versión
 
 ### Formato README
 - Si cambia una versión de dependencia que aparece en el README, actualizarla

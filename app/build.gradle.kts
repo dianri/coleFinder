@@ -11,7 +11,7 @@ val secretsProps = Properties().apply {
 
 fun getSecret(key: String): String = secretsProps.getProperty(key, "")
 
-val appVersionName = "1.1.1"
+val appVersionName = "1.1.2"
 
 plugins {
     alias(libs.plugins.android.application)
@@ -38,8 +38,8 @@ android {
         //   MAJOR: cambio incompatible o rediseño mayor
         //   MINOR: nueva funcionalidad compatible
         //   PATCH: bugfix o mejora menor
-        versionCode = 8
-        versionName = "1.1.1"
+        versionCode = 9
+        versionName = "1.1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
