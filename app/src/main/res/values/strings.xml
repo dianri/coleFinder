@@ -6,4 +6,6 @@
     <string name="in_app_update_ready_title">Actualización lista</string>
     <string name="in_app_update_ready_body">Reinicia la app para instalar la nueva versión.</string>
     <string name="in_app_update_restart">Reiniciar e instalar</string>
+    <string name="in_app_update_apply_now">Actualizar ahora</string>
+    <string name="in_app_update_dismiss">Cerrar aviso de actualización</string>
 </resources>

@@ -2,12 +2,18 @@ package es.colefinder
 
 import android.os.Bundle
 import android.util.Log
+import android.view.Window
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,12 +41,8 @@ class MainActivity : ComponentActivity() {
     private val inAppUpdateState = mutableStateOf(InAppUpdateUiState())
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        configureModernEdgeToEdge(window)
         super.onCreate(savedInstanceState)
-        // Edge-to-edge: sin setStatusBarColor/setNavigationBarColor en código propio.
-        // Play Console puede reportar Window.setStatusBarColor, setNavigationBarColor y
-        // LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES en clases ofuscadas de dependencias
-        // (p. ej. Maps SDK < 20). No hay usos en src/; maps-compose 6.6.0 + play-services-maps 20.0.0.
-        enableEdgeToEdge()
         inAppUpdateManager = InAppUpdateManager(this) { inAppUpdateState.value = it }
 
         lifecycleScope.launch {
@@ -50,19 +52,33 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by inAppUpdateState
             ColeFinderTheme {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background,
-                    ) {
-                        MapScreen()
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    contentWindowInsets = WindowInsets.systemBars,
+                ) { innerPadding ->
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background,
+                        ) {
+                            MapScreen(contentPadding = innerPadding)
+                        }
+                        InAppUpdateBanner(
+                            state = state,
+                            onUpdateClick = { inAppUpdateManager.startFlexibleUpdateFlow() },
+                            onRestartClick = { inAppUpdateManager.completeFlexibleUpdate() },
+                            onDismiss = {
+                                if (state.descargaCompletadaPendienteReinicio) {
+                                    inAppUpdateManager.dismissRestartBanner()
+                                } else {
+                                    inAppUpdateManager.dismissAvailableUpdateBanner()
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = innerPadding.calculateTopPadding()),
+                        )
                     }
-                    InAppUpdateBanner(
-                        state = state,
-                        onUpdateClick = { inAppUpdateManager.startFlexibleUpdateFlow() },
-                        onRestartClick = { inAppUpdateManager.completeFlexibleUpdate() },
-                        modifier = Modifier.align(Alignment.TopCenter),
-                    )
                 }
             }
         }
@@ -70,7 +86,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        inAppUpdateManager.checkForFlexibleUpdate()
+        inAppUpdateManager.checkForUpdateOnResume()
     }
 
     override fun onDestroy() {
@@ -89,6 +105,11 @@ class MainActivity : ComponentActivity() {
             val config = appConfigRepository.getUpdateConfig()
             if (BuildConfig.VERSION_CODE >= config.minVersionCode) return
 
+            val currentState = inAppUpdateState.value
+            if (currentState.hayActualizacionDisponible ||
+                currentState.descargaCompletadaPendienteReinicio
+            ) return
+
             val updateType = if (config.updateType == "IMMEDIATE") {
                 AppUpdateType.IMMEDIATE
             } else {
@@ -103,5 +124,18 @@ class MainActivity : ComponentActivity() {
 
     private companion object {
         private const val TAG = "InAppUpdate"
+
+        /**
+         * Edge-to-edge sin APIs deprecadas en Android 15 (setStatusBarColor,
+         * setNavigationBarColor, LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES).
+         * Con targetSdk 35+ el sistema fuerza edge-to-edge en Android 15; esto cubre API 30–34.
+         */
+        private fun configureModernEdgeToEdge(window: Window) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
+        }
     }
 }

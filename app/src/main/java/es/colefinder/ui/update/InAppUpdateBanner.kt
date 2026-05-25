@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,9 +31,12 @@ fun InAppUpdateBanner(
     state: InAppUpdateUiState,
     onUpdateClick: () -> Unit,
     onRestartClick: () -> Unit,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val visible = state.hayActualizacionDisponible || state.descargaCompletadaPendienteReinicio
+    val visible =
+        (state.hayActualizacionDisponible && !state.actualizacionDisponibleDescartada) ||
+            (state.descargaCompletadaPendienteReinicio && !state.reinicioBannerDescartado)
     AnimatedVisibility(
         visible = visible,
         modifier = modifier,
@@ -40,7 +46,6 @@ fun InAppUpdateBanner(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -79,16 +84,28 @@ fun InAppUpdateBanner(
                         }
                     }
                 }
-                when {
-                    state.descargaCompletadaPendienteReinicio ->
-                        TextButton(onClick = onRestartClick) {
-                            Text(stringResource(R.string.in_app_update_restart))
-                        }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    when {
+                        state.descargaCompletadaPendienteReinicio ->
+                            TextButton(onClick = onRestartClick) {
+                                Text(stringResource(R.string.in_app_update_apply_now))
+                            }
 
-                    state.hayActualizacionDisponible ->
-                        TextButton(onClick = onUpdateClick) {
-                            Text(stringResource(R.string.in_app_update_download))
-                        }
+                        state.hayActualizacionDisponible ->
+                            TextButton(onClick = onUpdateClick) {
+                                Text(stringResource(R.string.in_app_update_download))
+                            }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.in_app_update_dismiss),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
