@@ -105,6 +105,11 @@ class MainActivity : ComponentActivity() {
             val config = appConfigRepository.getUpdateConfig()
             if (BuildConfig.VERSION_CODE >= config.minVersionCode) return
 
+            val currentState = inAppUpdateState.value
+            if (currentState.hayActualizacionDisponible ||
+                currentState.descargaCompletadaPendienteReinicio
+            ) return
+
             val updateType = if (config.updateType == "IMMEDIATE") {
                 AppUpdateType.IMMEDIATE
             } else {
