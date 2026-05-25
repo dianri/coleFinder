@@ -93,7 +93,6 @@ class InAppUpdateManager(
                         uiState = uiState.copy(
                             descargaCompletadaPendienteReinicio = true,
                             hayActualizacionDisponible = false,
-                            reinicioBannerDescartado = false,
                         )
 
                     info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
